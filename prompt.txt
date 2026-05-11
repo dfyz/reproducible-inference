@@ -1,0 +1,7 @@
+Implement a `RandomNumberGenerator` class in Python. It should have:
+  * a `next()` method that returns a 64-bit integer
+  * a constructor accepting a 64-bit seed that should uniquely determine the sequence of random numbers returned by consecutive `next()` calls
+
+Additional requirements:
+  * use any algorithm you want but don't import any additional modules, even from the standard library
+  * make the implementation as short as reasonably possible

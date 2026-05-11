@@ -1,0 +1,1 @@
+Implement a Python function that checks if a string is a palindrome. Only output Python code without any Markdown markup or additional text.

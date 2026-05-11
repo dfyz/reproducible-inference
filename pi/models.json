@@ -1,0 +1,14 @@
+{
+  "providers": {
+    "vllm": {
+      "baseUrl": "http://35.88.20.103:43296/v1",
+      "api": "openai-completions",
+      "apiKey": "whatever",
+      "models": [
+        {
+          "id": "google/gemma-4-26B-A4B-it"
+        }
+      ]
+    }
+  }
+}
