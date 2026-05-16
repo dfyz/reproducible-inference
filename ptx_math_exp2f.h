@@ -1,3 +1,6 @@
+#include <math.h>
+#include <stdint.h>
+#include <string.h>
 #include <immintrin.h>
 
 inline uint32_t float_as_u32(float x)

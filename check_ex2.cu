@@ -1,4 +1,3 @@
-#include "core_math_exp2f.h"
 #include "ptx_math_exp2f.h"
 
 #include <cstdlib>
