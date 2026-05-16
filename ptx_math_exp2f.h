@@ -157,7 +157,9 @@ uint32_t ptxm_rro_ex2_sm5x(float x)
         x_bits |= UINT32_C(1) << 23;
         x_bits &= MASK_U32(24);
 
-        x_bits >>= min(-ilogbf(x), 24);
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+        x_bits >>= MIN(-ilogbf(x), 24);
+#undef MIN
     }
 
     const uint32_t i = fabsf(integral);
