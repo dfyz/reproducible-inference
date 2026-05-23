@@ -1,6 +1,8 @@
 // nvcc -DMODE=... -std=c++20 -Xcompiler=-mbmi2 -arch=sm_90a -O3 -o check_exp check_exp.cu
 #include "ptx_math_exp2f.h"
 
+#include <cmath>
+#include <cfenv>
 #include <cstdlib>
 #include <cstdio>
 #include <cstdint>
@@ -56,7 +58,7 @@ bool AreSame(float x, float y) {
 
 template <Mode mode>
 float GetCpuRes(float x) {
-    constexpr float log2e = 0x1.715476p+0f;
+    constexpr float log2e = 0x1.715476p+0f; // 1.442695e+00
 
     if constexpr (mode == Mode::Exp2) {
         return ptxm_ex2_sm5x(x);
@@ -72,7 +74,24 @@ float GetCpuRes(float x) {
         }
         return res;
     } else if constexpr (mode == Mode::Exp) {
-        // TODO: implement
+        // TODO: simplify
+        float y = fmaf(x, 0x1.77313ap-8 /*5.724980e-03*/, 0.5f);
+        y = fminf(1.0f, fmaxf(0.0f, y));
+        fesetround(FE_DOWNWARD);
+        y = fmaf(y, 252.0f, 12582913.0f);
+        fesetround(FE_TONEAREST);
+
+        float z = y - 12583039.0f;
+        z = fmaf(x, log2e, -z);
+        z = fmaf(x, 0x1.4ae0cp-26 /*1.925963e-08*/, z);
+
+        unsigned y_int;
+        memcpy(&y_int, &y, sizeof(unsigned));
+        y_int <<= 23;
+        memcpy(&y, &y_int, sizeof(float));
+
+        return y * ptxm_ex2_sm5x(z);
+
     } else {
         static_assert(AlwaysFalse<mode>);
     }
