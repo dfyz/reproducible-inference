@@ -61,9 +61,8 @@ float GetCpuRes(float x) {
     if constexpr (mode == Mode::Exp2) {
         return ptxm_ex2_sm5x(x);
     } else if constexpr (mode == Mode::FastExp) {
-        // TODO: fix discrepancies
         x *= log2e;
-        bool subnormal_res = x < 126.0f;
+        const bool subnormal_res = x < -126.0f;
         if (subnormal_res) {
             x *= 0.5f;
         }
