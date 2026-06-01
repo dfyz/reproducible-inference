@@ -51,26 +51,6 @@ float to_bf16(float x) {
     return x;
 }
 
-float ptx_exp(float x) {
-    const float log2e = 0x1.715476p+0f; // 1.442695e+00
-    float y = fmaf(x, 0x1.77313ap-8 /*5.724980e-03*/, 0.5f);
-    y = fminf(1.0f, fmaxf(0.0f, y));
-    fesetround(FE_DOWNWARD);
-    y = fmaf(y, 252.0f, 12582913.0f);
-    fesetround(FE_TONEAREST);
-
-    float z = y - 12583039.0f;
-    z = fmaf(x, log2e, -z);
-    z = fmaf(x, 0x1.4ae0cp-26 /*1.925963e-08*/, z);
-
-    unsigned y_int;
-    memcpy(&y_int, &y, sizeof(unsigned));
-    y_int <<= 23;
-    memcpy(&y, &y_int, sizeof(float));
-
-    return y * ptxm_ex2_sm5x(z);
-}
-
 int main(int argc, char** argv) {
     if (argc != 4) {
         fprintf(stderr, "Usage: SWISH_INPUT GATE_INPUT AFTER_SWIGLU\n");
