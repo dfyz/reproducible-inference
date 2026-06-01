@@ -1,6 +1,7 @@
 // gcc -O2 -o check_swiglu check_swiglu.c -lm -march=x86-64-v3
 #include "core_math_expf.h"
 #include "ptx_expf.h"
+#include "ptx_math_recip.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -80,9 +81,11 @@ int main(int argc, char** argv) {
     read(GATE_INPUT, argv[2]);
     read(AFTER_SWIGLU, argv[3]);
 
-    uint32_t ptx_core_mismatches = 0;
-    uint32_t glibc_core_mismatches = 0;
-    uint32_t ptx_glibc_mismatches = 0;
+    uint32_t exp_ptx_core_mismatches = 0;
+    uint32_t exp_glibc_core_mismatches = 0;
+    uint32_t exp_ptx_glibc_mismatches = 0;
+
+    uint32_t recip_core_mismatches = 0;
 
     for (size_t ii = 0; ii < N_ELEMS; ++ii) {
         float ref = load(AFTER_SWIGLU, ii);
@@ -96,18 +99,27 @@ int main(int argc, char** argv) {
         float glibc_exp = expf(to_exp);
 
         if (ptx_exp != core_exp) {
-            ++ptx_core_mismatches;
+            ++exp_ptx_core_mismatches;
         }
 
         if (glibc_exp != core_exp) {
-            ++glibc_core_mismatches;
+            ++exp_glibc_core_mismatches;
         }
 
         if (ptx_exp != glibc_exp) {
-            ++ptx_glibc_mismatches;
+            ++exp_ptx_glibc_mismatches;
         }
 
-        float ours_fp32 = si / (1.0f + ptx_exp) * gi;
+        float denom = 1.0f + ptx_exp;
+
+        float ptx_div = si * ptxm_rcp_sm5x(denom);
+        float core_div = si / denom;
+
+        if (ptx_div != core_div) {
+            ++recip_core_mismatches;
+        }
+
+        float ours_fp32 = ptx_div * gi;
         float ours_bf16 = to_bf16(ours_fp32);
 
         if (ours_bf16 != ref) {
@@ -115,9 +127,10 @@ int main(int argc, char** argv) {
         }
     }
 
-    printf("Hardware wasn't correctly rounded %u/%u times\n", ptx_core_mismatches, N_ELEMS);
-    printf("Glibc wasn't correctly rounded %u/%u times\n", glibc_core_mismatches, N_ELEMS);
-    printf("Hardware didn't match glibc %u/%u times\n", ptx_glibc_mismatches, N_ELEMS);
+    printf("Hardware exp wasn't correctly rounded %u/%u times\n", exp_ptx_core_mismatches, N_ELEMS);
+    printf("Glibc exp wasn't correctly rounded %u/%u times\n", exp_glibc_core_mismatches, N_ELEMS);
+    printf("Hardware exp didn't match glibc %u/%u times\n", exp_ptx_glibc_mismatches, N_ELEMS);
+    printf("Hardware div wasn't correctly rounded %u/%u times\n", recip_core_mismatches, N_ELEMS);
 
     return 0; 
 }
