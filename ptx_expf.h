@@ -23,3 +23,7 @@ float ptx_expf(float x) {
 
     return y * ptxm_ex2_sm5x(z);
 }
+
+float ptx_expf_approx(float x) {
+    return ptxm_ex2_sm5x(0x1.715476p+0 * x);
+}
