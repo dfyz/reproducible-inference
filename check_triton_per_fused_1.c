@@ -1,7 +1,12 @@
+#include "ptx_math_exp2f.h"
+#include "ptx_math_recip.h"
+#include "ptx_math_rsqrt.h"
+
 #include <err.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 
+#include <fenv.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -47,8 +52,31 @@ struct InOuts* load(const char* file_name) {
     return (struct InOuts*)res;
 }
 
+// Identical to `ptx_expf()`, except that the final multiplication
+// is fused with adding one.
+float ptx_expf_plus_1(float x) {
+    const float log2e = 0x1.715476p+0f; // 1.442695e+00
+    float y = fmaf(x, 0x1.77313ap-8 /*5.724980e-03*/, 0.5f);
+    y = fminf(1.0f, fmaxf(0.0f, y));
+    fesetround(FE_DOWNWARD);
+    y = fmaf(y, 252.0f, 12582913.0f);
+    fesetround(FE_TONEAREST);
+
+    float z = y - 12583039.0f;
+    z = fmaf(x, log2e, -z);
+    z = fmaf(x, 0x1.4ae0cp-26 /*1.925963e-08*/, z);
+
+    unsigned y_int;
+    memcpy(&y_int, &y, sizeof(unsigned));
+    y_int <<= 23;
+    memcpy(&y, &y_int, sizeof(float));
+
+    return fmaf(y, ptxm_ex2_sm5x(z), 1.0f);
+}
+
+
 float silu(float x) {
-    return x / (1.0f + expf(-x));
+    return x * ptxm_rcp_sm5x(ptx_expf_plus_1(-x));
 }
 
 int main(int argc, char** argv) {
@@ -73,13 +101,13 @@ int main(int argc, char** argv) {
             }
         }
         float sq_sum = acc[0] + acc[COLS/4];
-        float rms = sqrtf(sq_sum / COLS + EPS);
+        float rms = ptxm_rsqrt_sm5x(fmaf(sq_sum, 1.0f/COLS, EPS));
 
         for (size_t cc = 0; cc < COLS; ++cc) {
             float val = to_float(in_outs->norm_input[rr][cc]);
             float weight = to_float(in_outs->norm_weight[cc]);
             float silu_res = silu(to_float(in_outs->silu_input[rr][cc]));
-            float ours = val / rms * weight * silu_res;
+            float ours = val * rms * weight * silu_res;
             float ref = in_outs->ref_out[rr][cc];
 
             if (ours != ref) {
