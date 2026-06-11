@@ -59,11 +59,20 @@ int main(int argc, char** argv) {
     struct InOuts* in_outs = load(argv[1]);
 
     for (size_t rr = 0; rr < ROWS; ++rr) {
-        float sq_sum = 0.0f;
-        for (size_t cc = 0; cc < COLS; ++cc) {
-            float val = to_float(in_outs->norm_input[rr][cc]);
-            sq_sum += val * val;
+        float acc[COLS/2] = {};
+        for (size_t cc = 0; cc < COLS; cc += 2) {
+            float val1 = to_float(in_outs->norm_input[rr][cc + 0]);
+            float val2 = to_float(in_outs->norm_input[rr][cc + 1]);
+            acc[cc/2] = fmaf(val1, val1, val2 * val2);
         }
+        for (size_t warp_start = 0; warp_start < COLS/2; warp_start += COLS/4) {
+            for (size_t to_xor = 16; to_xor > 0; to_xor >>= 1) {
+                for (size_t cc = 0; cc < to_xor; ++cc) {
+                    acc[warp_start + cc] += acc[warp_start + (cc ^ to_xor)];
+                }
+            }
+        }
+        float sq_sum = acc[0] + acc[COLS/4];
         float rms = sqrtf(sq_sum / COLS + EPS);
 
         for (size_t cc = 0; cc < COLS; ++cc) {
