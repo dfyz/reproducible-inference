@@ -102,6 +102,11 @@ def messages_to_payload(messages, args):
         'model': args.model,
         'seed': args.seed,
         'temperature': args.temperature,
+        'top_p': args.top_p,
+        'top_k': args.top_k,
+        'min_p': args.min_p,
+        'presence_penalty': args.presence_penalty,
+        'repetition_penalty': args.repetition_penalty,
         'tool_choice': 'auto',
         'tools': TOOLS,
     }
@@ -115,8 +120,14 @@ if __name__ == '__main__':
     parser.add_argument('--replay', type=str, default=None)
     parser.add_argument('--model', type=str, default='Qwen/Qwen3.6-35B-A3B')
     parser.add_argument('--seed', type=int, default=31337)
-    parser.add_argument('--temperature', type=float, default=0.0)
     parser.add_argument('--openrouter-token', type=str, default=None)
+    # The default settings for "Thinking mode for precise coding tasks"
+    parser.add_argument('--temperature', type=float, default=0.6)
+    parser.add_argument('--top-p', type=float, default=0.95)
+    parser.add_argument('--top-k', type=int, default=20)
+    parser.add_argument('--min-p', type=float, default=0.0)
+    parser.add_argument('--presence-penalty', type=float, default=0.0)
+    parser.add_argument('--repetition-penalty', type=float, default=1.0)
     args = parser.parse_args()
 
     if args.replay is not None:
