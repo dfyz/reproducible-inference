@@ -13,10 +13,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define ROWS 32
+#define ROWS (32*8192)
 #define COLS 128
 // 1e-6
 #define EPS 0x1.0c6f7ap-20f
+#define ELEMS_PER_THREAD 8
+#define THREADS_PER_REDUCTION (COLS/ELEMS_PER_THREAD)
 
 typedef uint16_t bf16;
 
@@ -24,7 +26,7 @@ struct InOuts {
     bf16 norm_input[ROWS][COLS];
     bf16 silu_input[ROWS][COLS];
     bf16 norm_weight[COLS];
-    float ref_out[ROWS][COLS];
+    bf16 ref_out[ROWS][COLS];
 };
 
 union flint {
@@ -34,6 +36,14 @@ union flint {
 
 float to_float(bf16 x) {
     union flint res = {.i = ((uint32_t)x) << 16};
+    return res.f;
+}
+
+float to_bf16(float x) {
+    union flint res = {.f = x};
+    unsigned bias = (res.i >> 16) & 1;
+    res.i += 0x7FFFU + bias;
+    res.i &= 0xFFFF0000U;
     return res.f;
 }
 
@@ -74,7 +84,6 @@ float ptx_expf_plus_1(float x) {
     return fmaf(y, ptxm_ex2_sm5x(z), 1.0f);
 }
 
-
 float silu(float x) {
     return x * ptxm_rcp_sm5x(ptx_expf_plus_1(-x));
 }
@@ -87,28 +96,36 @@ int main(int argc, char** argv) {
     struct InOuts* in_outs = load(argv[1]);
 
     for (size_t rr = 0; rr < ROWS; ++rr) {
-        float acc[COLS/2] = {};
-        for (size_t cc = 0; cc < COLS; cc += 2) {
-            float val1 = to_float(in_outs->norm_input[rr][cc + 0]);
-            float val2 = to_float(in_outs->norm_input[rr][cc + 1]);
-            acc[cc/2] = fmaf(val1, val1, val2 * val2);
+        // XBLOCK=8 reduction within a half-warp (16 threads):
+        //   * each thread computes a initial square with a multiplication
+        //   * each threads does 7 additional FMAs to accumulate 7 more squares
+        float acc[THREADS_PER_REDUCTION] = {};
+        for (size_t cc = 0; cc < COLS; cc += ELEMS_PER_THREAD) {
+            float val = to_float(in_outs->norm_input[rr][cc]);
+            float local_sq_sum = val * val;
+            for (size_t off = 1; off < ELEMS_PER_THREAD; ++off) {
+                val = to_float(in_outs->norm_input[rr][cc + off]);
+                local_sq_sum = fmaf(val, val, local_sq_sum);
+            }
+            acc[cc/ELEMS_PER_THREAD] = local_sq_sum;
         }
-        for (size_t warp_start = 0; warp_start < COLS/2; warp_start += COLS/4) {
-            for (size_t to_xor = 16; to_xor > 0; to_xor >>= 1) {
-                for (size_t cc = 0; cc < to_xor; ++cc) {
-                    acc[warp_start + cc] += acc[warp_start + (cc ^ to_xor)];
-                }
+        //   * a butterfly shuffle with regular additions is performed
+        for (size_t to_xor = THREADS_PER_REDUCTION/2; to_xor > 0; to_xor >>= 1) {
+            for (size_t cc = 0; cc < to_xor; ++cc) {
+                acc[cc] += acc[cc ^ to_xor];
             }
         }
-        float sq_sum = acc[0] + acc[COLS/4];
-        float rms = ptxm_rsqrt_sm5x(fmaf(sq_sum, 1.0f/COLS, EPS));
+        float sq_sum = acc[0];
+        // We need to divide the square sum by 128 and add the epsilon.
+        // The XBLOCK=8 version performs `div.full.f32` then `add.f32` (no FMA).
+        float rms = ptxm_rsqrt_sm5x(sq_sum/COLS + EPS);
 
         for (size_t cc = 0; cc < COLS; ++cc) {
             float val = to_float(in_outs->norm_input[rr][cc]);
             float weight = to_float(in_outs->norm_weight[cc]);
             float silu_res = silu(to_float(in_outs->silu_input[rr][cc]));
-            float ours = val * rms * weight * silu_res;
-            float ref = in_outs->ref_out[rr][cc];
+            float ours = to_bf16(val * rms * weight * silu_res);
+            float ref = to_float(in_outs->ref_out[rr][cc]);
 
             if (ours != ref) {
                 printf("(%zu, %zu): %1.8e (%a) vs. %1.8e (%a)\n", rr, cc, ours, ours, ref, ref);
