@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define REF_OUT_IS_FLOAT 1
+#define REF_OUT_IS_FLOAT 0
 #define ROWS (32*8192)
 #define COLS 128
 // 1e-6
@@ -70,28 +70,71 @@ struct InOuts* load(const char* file_name) {
 
 // Identical to `ptx_expf()`, except that the final multiplication
 // is fused with adding one.
-float ptx_expf_plus_1(float x) {
+float ptx_expf_plus_1(float x, bool dbg) {
     const float log2e = 0x1.715476p+0f; // 1.442695e+00
     float y = fmaf(x, 0x1.77313ap-8 /*5.724980e-03*/, 0.5f);
+
+    if (dbg) {
+        union flint tmp = {.f = y};
+        printf("y: %08x\n", tmp.i);
+    }
+
     y = fminf(1.0f, fmaxf(0.0f, y));
     fesetround(FE_DOWNWARD);
     y = fmaf(y, 252.0f, 12582913.0f);
     fesetround(FE_TONEAREST);
 
+    if (dbg) {
+        union flint tmp = {.f = y};
+        printf("y2: %08x\n", tmp.i);
+    }
+
     float z = y - 12583039.0f;
+
+    if (dbg) {
+        union flint tmp = {.f = z};
+        printf("z: %08x\n", tmp.i);
+    }
+
     z = fmaf(x, log2e, -z);
+
+    if (dbg) {
+        union flint tmp = {.f = z};
+        printf("z2: %08x\n", tmp.i);
+    }
+
     z = fmaf(x, 0x1.4ae0cp-26 /*1.925963e-08*/, z);
+
+    if (dbg) {
+        union flint tmp = {.f = z};
+        printf("z3: %08x\n", tmp.i);
+    }
 
     unsigned y_int;
     memcpy(&y_int, &y, sizeof(unsigned));
     y_int <<= 23;
     memcpy(&y, &y_int, sizeof(float));
 
-    return fmaf(y, ptxm_ex2_sm5x(z), 1.0f);
+    float ex2_res = ptxm_ex2_sm5x(z);
+    if (dbg) {
+        union flint tmp = {.f = ex2_res};
+        printf("ex2_res: %08x\n", tmp.i);
+    }
+    float res = fmaf(y, ex2_res, 1.0f);
+    if (dbg) {
+        union flint tmp = {.f = res};
+        printf("exp_res: %08x\n", tmp.i);
+    }
+    return res;
 }
 
-float silu(float x) {
-    return x * ptxm_rcp_sm5x(ptx_expf_plus_1(-x));
+float silu(float x, bool dbg) {
+    float rcp_res = ptxm_rcp_sm5x(ptx_expf_plus_1(-x, dbg));
+    if (dbg) {
+        union flint tmp = {.f = rcp_res};
+        printf("rcp_res: %08x\n", tmp.i);
+    }
+    return x * rcp_res;
 }
 
 int main(int argc, char** argv) {
@@ -115,23 +158,63 @@ int main(int argc, char** argv) {
             }
             acc[cc/ELEMS_PER_THREAD] = local_sq_sum;
         }
+
+        bool dbg = rr == 4;
+
         //   * a butterfly shuffle with regular additions is performed
         for (size_t to_xor = THREADS_PER_REDUCTION/2; to_xor > 0; to_xor >>= 1) {
+            if (dbg) {
+                union flint tmp = {.f = acc[0]};
+                printf("xor%zu: %08x\n", to_xor, tmp.i);
+            }
             for (size_t cc = 0; cc < to_xor; ++cc) {
                 acc[cc] += acc[cc ^ to_xor];
             }
+        }
+        if (dbg) {
+            union flint tmp = {.f = acc[0]};
+            printf("final: %08x\n", tmp.i);
         }
         float sq_sum = acc[0];
         // We need to divide the square sum by 128 and add the epsilon.
         // The initial PTX version performs `div.full.f32` then `add.f32` (no FMA).
         // It is lowered down to a FMA in SASS.
-        float rms = ptxm_rsqrt_sm5x(fmaf(sq_sum, 1.0f/COLS, EPS));
+        float pre_rms = fmaf(sq_sum, 1.0f/COLS, EPS);
+        if (dbg) {
+            union flint tmp = {.f = pre_rms};
+            printf("pre_root: %08x\n", tmp.i);
+        }
+        float rms = ptxm_rsqrt_sm5x(pre_rms);
+        if (dbg) {
+            union flint tmp = {.f = rms};
+            printf("post_root: %08x\n", tmp.i);
+        }
 
         for (size_t cc = 0; cc < COLS; ++cc) {
             float val = to_float(in_outs->norm_input[rr][cc]);
             float weight = to_float(in_outs->norm_weight[cc]);
-            float silu_res = silu(to_float(in_outs->silu_input[rr][cc]));
-            float ours = val * rms * weight * silu_res;
+            float silu_res = silu(to_float(in_outs->silu_input[rr][cc]), dbg && cc == 0);
+            if (dbg && cc == 0) {
+                union flint tmp = {.f = silu_res};
+                printf("silu res: %08x\n", tmp.i);
+            }
+
+            float normed = val * rms;
+            if (dbg && cc == 0) {
+                union flint tmp = {.f = normed};
+                printf("normed: %08x\n", tmp.i);
+            }
+            float weighted = normed * weight;
+            if (dbg && cc == 0) {
+                union flint tmp = {.f = weighted};
+                printf("weighted: %08x\n", tmp.i);
+            }
+
+            float ours = weighted * silu_res;
+            if (dbg && cc == 0) {
+                union flint tmp = {.f = ours};
+                printf("ours: %08x\n", tmp.i);
+            }
 
 #if REF_OUT_IS_FLOAT
             float ref = in_outs->ref_out[rr][cc];
