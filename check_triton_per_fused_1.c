@@ -123,8 +123,9 @@ int main(int argc, char** argv) {
         }
         float sq_sum = acc[0];
         // We need to divide the square sum by 128 and add the epsilon.
-        // The XBLOCK=8 version performs `div.full.f32` then `add.f32` (no FMA).
-        float rms = ptxm_rsqrt_sm5x(sq_sum/COLS + EPS);
+        // The initial PTX version performs `div.full.f32` then `add.f32` (no FMA).
+        // It is lowered down to a FMA in SASS.
+        float rms = ptxm_rsqrt_sm5x(fmaf(sq_sum, 1.0f/COLS, EPS));
 
         for (size_t cc = 0; cc < COLS; ++cc) {
             float val = to_float(in_outs->norm_input[rr][cc]);
