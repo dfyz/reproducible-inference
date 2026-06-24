@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define REF_OUT_IS_FLOAT 1
 #define ROWS (32*8192)
 #define COLS 128
 // 1e-6
@@ -26,7 +27,12 @@ struct InOuts {
     bf16 norm_input[ROWS][COLS];
     bf16 silu_input[ROWS][COLS];
     bf16 norm_weight[COLS];
-    bf16 ref_out[ROWS][COLS];
+#if REF_OUT_IS_FLOAT
+    float
+#else
+    bf16
+#endif
+    ref_out[ROWS][COLS];
 };
 
 union flint {
@@ -124,8 +130,14 @@ int main(int argc, char** argv) {
             float val = to_float(in_outs->norm_input[rr][cc]);
             float weight = to_float(in_outs->norm_weight[cc]);
             float silu_res = silu(to_float(in_outs->silu_input[rr][cc]));
-            float ours = to_bf16(val * rms * weight * silu_res);
+            float ours = val * rms * weight * silu_res;
+
+#if REF_OUT_IS_FLOAT
+            float ref = in_outs->ref_out[rr][cc];
+#else
+            ours = to_bf16(ours);
             float ref = to_float(in_outs->ref_out[rr][cc]);
+#endif
 
             if (ours != ref) {
                 printf("(%zu, %zu): %1.8e (%a) vs. %1.8e (%a)\n", rr, cc, ours, ours, ref, ref);
