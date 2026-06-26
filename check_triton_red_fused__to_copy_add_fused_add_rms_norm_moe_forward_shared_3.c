@@ -1,3 +1,5 @@
+#pragma STDC FP_CONTRACT OFF
+
 #include "ptx_math_recip.h"
 #include "ptx_math_rsqrt.h"
 
@@ -14,6 +16,8 @@
 #define EPS 0x1.0c6f7ap-20f
 #define ELEMS_PER_THREAD 8
 #define WARP_THREADS 32
+
+#define BLACKWELL 0
 
 typedef uint16_t bf16;
 
@@ -68,7 +72,11 @@ int main(int argc, char** argv) {
             for (size_t off = 2; off < ELEMS_PER_THREAD; ++off) {
                 float val = to_float(in_outs->residual[rr][cc + off]) +
                             to_float(in_outs->hidden  [rr][cc + off]);
+#if BLACKWELL
+                local_sq_sum += val * val;
+#else
                 local_sq_sum = fmaf(val, val, local_sq_sum);
+#endif
             }
             thread_acc[cc/ELEMS_PER_THREAD] = local_sq_sum;
         }
