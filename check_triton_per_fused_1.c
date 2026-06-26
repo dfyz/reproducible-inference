@@ -150,10 +150,12 @@ int main(int argc, char** argv) {
         //   * each threads does 7 additional FMAs to accumulate 7 more squares
         float acc[THREADS_PER_REDUCTION] = {};
         for (size_t cc = 0; cc < COLS; cc += ELEMS_PER_THREAD) {
-            float val = to_float(in_outs->norm_input[rr][cc]);
-            float local_sq_sum = val * val;
-            for (size_t off = 1; off < ELEMS_PER_THREAD; ++off) {
-                val = to_float(in_outs->norm_input[rr][cc + off]);
+            float val0 = to_float(in_outs->norm_input[rr][cc + 0]);
+            float val1 = to_float(in_outs->norm_input[rr][cc + 1]);
+            // The first two elements are swapped for some reason.
+            float local_sq_sum = fmaf(val0, val0, val1 * val1);
+            for (size_t off = 2; off < ELEMS_PER_THREAD; ++off) {
+                float val = to_float(in_outs->norm_input[rr][cc + off]);
                 local_sq_sum = fmaf(val, val, local_sq_sum);
             }
             acc[cc/ELEMS_PER_THREAD] = local_sq_sum;
