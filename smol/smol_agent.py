@@ -2,6 +2,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import os
 import subprocess
 import sys
 import urllib.error
@@ -11,7 +12,7 @@ import urllib.request
 MAX_STEPS = 10000
 BASE_PATH = Path(__file__).parent
 PROMPT = (BASE_PATH / 'whenwords.txt').read_text()
-SYSTEM_PROMPT = 'You are an expert Python programmer that uses the POSIX shell to write Python.'
+SYSTEM_PROMPT = 'You are a coding agent with access to a shell tool.'
 TOOLS = [
     {
         'type': 'function',
@@ -77,7 +78,7 @@ def get_tool_result_message(tool):
         shell=True,
         capture_output=True,
         encoding='utf-8',
-        env={'LD_PRELOAD': '/usr/lib/faketime/libfaketime.so.1'},
+        env=os.environ.copy() | {'LD_PRELOAD': '/usr/lib/faketime/libfaketime.so.1'},
     )
 
     print(f'Launched command\n{sh_res.args}')
