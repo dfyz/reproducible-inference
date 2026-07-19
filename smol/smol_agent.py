@@ -35,6 +35,7 @@ TOOLS = [
 def query(base_url, payload, token):
     headers = {
         'Content-Type': 'application/json',
+        'User-Agent': 'smol',
     }
     if token is not None:
         headers['Authorization'] = f'Bearer {token}'
@@ -123,13 +124,20 @@ if __name__ == '__main__':
         response = query(args.base_url, payload, args.openrouter_token)
         response_msg = response['choices'][0]['message']
 
-        GREEN = "\033[0;32m"
-        END = "\033[0m"
+        GREEN = '\033[0;32m'
+        END = '\033[0m'
 
-        print(f'{GREEN}Content{END}\n{response_msg["content"]}')
-        print(f'{GREEN}Reasoning{END}\n{response_msg["reasoning"]}')
-        for ii, tc in enumerate(response_msg["tool_calls"]):
-            cmd = json.loads(tc["function"]["arguments"])["cmd"]
+        print(f'{GREEN}Content{END}\n{response_msg['content']}')
+
+        reasoning = 'N/A'
+        if 'reasoning' in response_msg:
+            reasoning = response_msg['reasoning']
+        elif 'reasoning_content' in response_msg:
+            reasoning = response_msg['reasoning_content']
+
+        print(f'{GREEN}Reasoning{END}\n{reasoning}')
+        for ii, tc in enumerate(response_msg['tool_calls']):
+            cmd = json.loads(tc['function']['arguments'])['cmd']
 
             print(f'{GREEN}Tool output {ii}{END}')
             print(cmd)
@@ -150,7 +158,7 @@ if __name__ == '__main__':
     for step in range(MAX_STEPS):
         payload = messages_to_payload(messages, args)
 
-        payload_hash = hashlib.sha256(json.dumps(payload).encode("utf-8")).hexdigest()
+        payload_hash = hashlib.sha256(json.dumps(payload).encode('utf-8')).hexdigest()
         print(f'Sending request with hash {payload_hash}')
 
         if args.verbose:

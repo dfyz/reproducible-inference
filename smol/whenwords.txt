@@ -5,7 +5,7 @@ Implement the whenwords library in Python.
 3. Implement all five functions: timeago, duration, parse_duration, 
    human_date, date_range
 4. Run tests until all pass
-5. Place implementation in ./whenwords
+5. Place implementation in /root/pywhenwords
 
 All tests.yaml test cases must pass. See SPEC.md "Testing" section 
 for test generation examples.
