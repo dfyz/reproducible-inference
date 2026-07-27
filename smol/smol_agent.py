@@ -136,7 +136,7 @@ if __name__ == '__main__':
             reasoning = response_msg['reasoning_content']
 
         print(f'{GREEN}Reasoning{END}\n{reasoning}')
-        for ii, tc in enumerate(response_msg['tool_calls']):
+        for ii, tc in enumerate(response_msg.get('tool_calls', [])):
             cmd = json.loads(tc['function']['arguments'])['cmd']
 
             print(f'{GREEN}Tool output {ii}{END}')
@@ -175,14 +175,17 @@ if __name__ == '__main__':
         model_message = first_choice['message']
         messages.append(model_message)
 
-        if not model_message.get('tool_calls', []):
-            print('ALL DONE')
-            break
-
-        for tool in model_message['tool_calls']:
+        # The API response might contain `tool_calls: null`,
+        # so we can't use .get('tool_calls', []).
+        tool_calls = model_message.get('tool_calls') or []
+        for tool in tool_calls:
             messages.append(get_tool_result_message(tool))
 
         if args.trajectory_dir is not None:
             (Path(args.trajectory_dir) / f'{step:05d}.json').write_text(
                 json.dumps(messages, indent=2)
             )
+
+        if not tool_calls:
+            print('ALL DONE')
+            break
