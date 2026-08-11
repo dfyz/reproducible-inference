@@ -83,13 +83,17 @@ float smol_exp2(float x) {
 
     constexpr float n_bases = 0x1p6;
 
-    float frac     = x - truncf(x);
+    float integral = truncf(x);
+    float frac     = x - integral;
     float base_idx = truncf(frac * n_bases);
     float offset   = frac - base_idx / n_bases
                           + 1.0f
                           - 1.0f;
     double* cc = coefs[(size_t)base_idx];
-    volatile float res = cc[0] + offset * cc[1];
+    volatile float res = ldexp(
+        cc[0] + offset * cc[1],
+        (int)integral
+    );
     fesetround(old_rounding);
     return res;
 }
@@ -102,12 +106,16 @@ union fp32_int {
 int main() {
     for (uint64_t ii = 0; ii <= UINT_MAX; ++ii) {
         union fp32_int tmp = {.i = ii};
-        // No range reduction is performed.
-        if (!isfinite(tmp.f) || tmp.f < 0.0f || tmp.f >= 1.0f) {
+        // Only non-negative numbers are handled.
+        if (!isfinite(tmp.f) || tmp.f < 0.0f) {
             continue;
         }
 
         float ref = ptxm_ex2_sm5x(tmp.f);
+        if (!isfinite(ref)) {
+            continue;
+        }
+
         // No quadratic term is added.
         float our = smol_exp2(tmp.f);
 
