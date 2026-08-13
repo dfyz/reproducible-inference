@@ -10,9 +10,8 @@
 #include <stdio.h>
 #include <stdint.h>
 
-constexpr int FP64_MANTISSA_BITS = 52;
-
 double truncate(double x, int last_bit) {
+    constexpr int FP64_MANTISSA_BITS = 52;
     double magic = 1ULL << (FP64_MANTISSA_BITS + last_bit);
     return x + magic - magic;
 }
@@ -97,9 +96,6 @@ float smol_exp2(float x) {
         { 0x1.fa7c1a5f88p+0, 0x1.5f10p+0, 0x1.ea0p-2 },
     };
 
-    int old_rounding = fegetround();
-    fesetround(FE_TOWARDZERO);
-
     constexpr float n_bases = 0x1p6;
 
     float integral = truncf(x);
@@ -108,14 +104,10 @@ float smol_exp2(float x) {
 
     double offset  = truncate(frac - base_idx/n_bases, -23);
     double* cc     = coefs[(size_t)base_idx];
-    // `volatile` is needed for `gcc.
-    volatile float res = ldexp(
+    return ldexp(
         cc[0] + offset*cc[1] + approx_square(offset)*cc[2],
         (int)integral
     );
-
-    fesetround(old_rounding);
-    return res;
 }
 
 union fp32_int {
@@ -124,6 +116,7 @@ union fp32_int {
 };
 
 int main() {
+    int orig_rounding = fegetround();
     for (uint64_t ii = 0; ii <= UINT_MAX; ++ii) {
         union fp32_int tmp = {.i = ii};
         // Only non-negative numbers are handled.
@@ -136,7 +129,10 @@ int main() {
             continue;
         }
 
+
+        fesetround(FE_TOWARDZERO);
         float our = smol_exp2(tmp.f);
+        fesetround(orig_rounding);
 
         if (ii % 100'000'000 == 0) {
             fprintf(stderr, "%lu/%lu\n", ii, UINT_MAX);
