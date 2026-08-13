@@ -10,6 +10,25 @@
 #include <stdio.h>
 #include <stdint.h>
 
+constexpr int FP64_MANTISSA_BITS = 52;
+
+double truncate(double x, int last_bit) {
+    double magic = 1ULL << (FP64_MANTISSA_BITS + last_bit);
+    return x + magic - magic;
+}
+
+double approx_square(double x) {
+    double x_orig = x;
+    double res = 0.0f;
+    for (double shift = 0x1p-7; shift >= 0x1p-23; shift *= 0x1p-1) {
+        if (x >= shift) {
+            res += truncate(x_orig * shift, -28);
+            x -= shift;
+        }
+    }
+    return truncate(res, -27);
+}
+
 float smol_exp2(float x) {
     double coefs[64][3] = {
         { 0x1.000001df88p+0, 0x1.62e4p-1, 0x1.ee0p-3 },
@@ -85,15 +104,15 @@ float smol_exp2(float x) {
 
     float integral = truncf(x);
     float frac     = x - integral;
-    float base_idx = truncf(frac * n_bases);
-    float offset   = frac - base_idx / n_bases
-                          + 1.0f
-                          - 1.0f;
-    double* cc = coefs[(size_t)base_idx];
+    float base_idx = truncf(frac*n_bases);
+
+    double offset  = truncate(frac - base_idx/n_bases, -23);
+    double* cc     = coefs[(size_t)base_idx];
     volatile float res = ldexp(
-        cc[0] + offset * cc[1],
+        cc[0] + offset*cc[1] + approx_square(offset)*cc[2],
         (int)integral
     );
+
     fesetround(old_rounding);
     return res;
 }
@@ -116,7 +135,6 @@ int main() {
             continue;
         }
 
-        // No quadratic term is added.
         float our = smol_exp2(tmp.f);
 
         if (ii % 100'000'000 == 0) {
