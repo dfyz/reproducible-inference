@@ -28,7 +28,7 @@ double approx_square(double x) {
     return truncate(res, -27);
 }
 
-constexpr double coefs[64][3] = {
+constexpr double COEFS[64][3] = {
     { 0x1.000001df88p+0, 0x1.62e4p-1, 0x1.ee0p-3 },
     { 0x1.02c9a55f88p+0, 0x1.66c0p-1, 0x1.f50p-3 },
     { 0x1.059b0f5f88p+0, 0x1.6aa8p-1, 0x1.fa0p-3 },
@@ -95,19 +95,19 @@ constexpr double coefs[64][3] = {
     { 0x1.fa7c1a5f88p+0, 0x1.5f10p+0, 0x1.ea0p-2 },
 };
 
+constexpr float N_BASES = 0x1p6;
+
 float smol_exp2(float x) {
     if (x >= 0x1p7) {
         return INFINITY;
     }
 
-    constexpr float n_bases = 0x1p6;
-
     float integral = truncf(x);
     float frac     = x - integral;
-    float base_idx = truncf(frac*n_bases);
+    float base_idx = truncf(frac*N_BASES);
 
-    double offset    = truncate(frac - base_idx/n_bases, -23);
-    const double* cc = coefs[(size_t)base_idx];
+    double offset    = truncate(frac - base_idx/N_BASES, -23);
+    const double* cc = COEFS[(size_t)base_idx];
     return ldexp(
         cc[0] + offset*cc[1] + approx_square(offset)*cc[2],
         (int)integral
