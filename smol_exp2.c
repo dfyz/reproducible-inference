@@ -98,7 +98,7 @@ float smol_exp2(float x) {
     };
 
     int old_rounding = fegetround();
-    fesetround(FE_DOWNWARD);
+    fesetround(FE_TOWARDZERO);
 
     constexpr float n_bases = 0x1p6;
 
@@ -108,6 +108,7 @@ float smol_exp2(float x) {
 
     double offset  = truncate(frac - base_idx/n_bases, -23);
     double* cc     = coefs[(size_t)base_idx];
+    // `volatile` is needed for `gcc.
     volatile float res = ldexp(
         cc[0] + offset*cc[1] + approx_square(offset)*cc[2],
         (int)integral
