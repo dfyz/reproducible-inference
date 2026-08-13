@@ -19,7 +19,7 @@ double truncate(double x, int last_bit) {
 double approx_square(double x) {
     double x_orig = x;
     double res = 0.0f;
-    for (double shift = 0x1p-7; shift >= 0x1p-23; shift *= 0x1p-1) {
+    for (double shift = 0x1p-7; shift >= 0x1p-21; shift *= 0x1p-1) {
         if (x >= shift) {
             res += truncate(x_orig * shift, -28);
             x -= shift;
@@ -29,7 +29,11 @@ double approx_square(double x) {
 }
 
 float smol_exp2(float x) {
-    double coefs[64][3] = {
+    if (x >= 0x1p7) {
+        return INFINITY;
+    }
+
+    constexpr double coefs[64][3] = {
         { 0x1.000001df88p+0, 0x1.62e4p-1, 0x1.ee0p-3 },
         { 0x1.02c9a55f88p+0, 0x1.66c0p-1, 0x1.f50p-3 },
         { 0x1.059b0f5f88p+0, 0x1.6aa8p-1, 0x1.fa0p-3 },
@@ -102,8 +106,8 @@ float smol_exp2(float x) {
     float frac     = x - integral;
     float base_idx = truncf(frac*n_bases);
 
-    double offset  = truncate(frac - base_idx/n_bases, -23);
-    double* cc     = coefs[(size_t)base_idx];
+    double offset    = truncate(frac - base_idx/n_bases, -23);
+    const double* cc = coefs[(size_t)base_idx];
     return ldexp(
         cc[0] + offset*cc[1] + approx_square(offset)*cc[2],
         (int)integral
@@ -116,33 +120,26 @@ union fp32_int {
 };
 
 int main() {
-    int orig_rounding = fegetround();
+    fesetround(FE_TOWARDZERO);
     for (uint64_t ii = 0; ii <= UINT_MAX; ++ii) {
-        union fp32_int tmp = {.i = ii};
-        // Only non-negative numbers are handled.
-        if (!isfinite(tmp.f) || tmp.f < 0.0f) {
-            continue;
-        }
-
-        float ref = ptxm_ex2_sm5x(tmp.f);
-        if (!isfinite(ref)) {
-            continue;
-        }
-
-
-        fesetround(FE_TOWARDZERO);
-        float our = smol_exp2(tmp.f);
-        fesetround(orig_rounding);
-
         if (ii % 100'000'000 == 0) {
             fprintf(stderr, "%lu/%lu\n", ii, UINT_MAX);
         }
 
-        if (ref != our) {
-            printf("x   = %.13a\n", tmp.f);
-            printf("ref = %.13a\n", ref);
-            printf("our = %.13a\n", our);
-            exit(1);
+        union fp32_int tmp = {.i = ii};
+
+        if (!isnan(tmp.f)) {
+            float ref = ptxm_ex2_sm5x(tmp.f);
+            if (!isnan(ref)) {
+                float our = smol_exp2(tmp.f);
+
+                if (ref != our) {
+                    printf("x   = %.13a\n", tmp.f);
+                    printf("ref = %.13a\n", ref);
+                    printf("our = %.13a\n", our);
+                    exit(1);
+                }
+            }
         }
     }
 }
