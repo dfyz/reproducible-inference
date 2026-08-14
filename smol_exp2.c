@@ -5,27 +5,25 @@
 #pragma STDC FP_CONTRACT OFF
 
 #include <fenv.h>
+#include <float.h>
 #include <limits.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdint.h>
 
-double truncate(double x, int last_bit) {
-    constexpr int FP64_MANTISSA_BITS = 52;
-    double magic = 1ULL << (FP64_MANTISSA_BITS + last_bit);
-    return x + magic - magic;
-}
+
+#define TRUNCATE(x, magic) (x + magic - magic)
 
 double approx_square(double x) {
     double x_orig = x;
     double res = 0.0f;
     for (double shift = 0x1p-7; shift >= 0x1p-21; shift *= 0x1p-1) {
         if (x >= shift) {
-            res += truncate(x_orig * shift, -28);
+            res += TRUNCATE(x_orig * shift, 0x1p24);
             x -= shift;
         }
     }
-    return truncate(res, -27);
+    return TRUNCATE(res, 0x1p25);
 }
 
 constexpr double COEFS[64][3] = {
@@ -98,20 +96,25 @@ constexpr double COEFS[64][3] = {
 constexpr float N_BASES = 0x1p6;
 
 float smol_exp2(float x) {
-    if (x >= 0x1p7) {
+    if (x >= 128.0f) {
         return INFINITY;
     }
 
     float integral = truncf(x);
-    float frac     = x - integral;
-    float base_idx = truncf(frac*N_BASES);
+    float frac = TRUNCATE(fabsf(x - integral), 1.0f);
 
-    double offset    = truncate(frac - base_idx/N_BASES, -23);
+    if (frac != 0.0f && x < 0.0f) {
+        frac = 1.0f - 0x1p-23f - frac;
+        --integral;
+    }
+
+    float base_idx = truncf(frac*N_BASES);
+    double offset = frac - base_idx/N_BASES;
+
     const double* cc = COEFS[(size_t)base_idx];
-    return ldexp(
-        cc[0] + offset*cc[1] + approx_square(offset)*cc[2],
-        (int)integral
-    );
+    double poly = cc[0] + offset*cc[1] + approx_square(offset)*cc[2];
+    float res = (float)ldexp(poly, (int)integral);
+    return res >= FLT_MIN ? res : 0.0f;
 }
 
 union fp32_int {
