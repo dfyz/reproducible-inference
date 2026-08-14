@@ -96,9 +96,8 @@ constexpr double COEFS[64][3] = {
 constexpr float N_BASES = 0x1p6;
 
 float smol_exp2(float x) {
-    if (x >= 128.0f) {
-        return INFINITY;
-    }
+    if (x >= 128.0f) return INFINITY;
+    if (x < -126.0f) return 0.0f;
 
     float integral = truncf(x);
     float frac = TRUNCATE(fabsf(x - integral), 1.0f);
@@ -113,8 +112,7 @@ float smol_exp2(float x) {
 
     const double* cc = COEFS[(size_t)base_idx];
     double poly = cc[0] + offset*cc[1] + approx_square(offset)*cc[2];
-    float res = (float)ldexp(poly, (int)integral);
-    return res >= FLT_MIN ? res : 0.0f;
+    return ldexp(poly, (int)integral);
 }
 
 union fp32_int {
