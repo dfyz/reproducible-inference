@@ -17,10 +17,10 @@
 double approx_square(double x) {
     double x_orig = x;
     double res = 0.0f;
-    for (double shift = 0x1p-7; shift >= 0x1p-21; shift *= 0x1p-1) {
-        if (x >= shift) {
-            res += TRUNCATE(x_orig * shift, 0x1p24);
-            x -= shift;
+    for (double bit = 0x1p-7; bit >= 0x1p-21; bit *= 0.5) {
+        if (x >= bit) {
+            res += TRUNCATE(x_orig * bit, 0x1p24);
+            x -= bit;
         }
     }
     return TRUNCATE(res, 0x1p25);
@@ -93,13 +93,11 @@ constexpr double COEFS[64][3] = {
     { 0x1.fa7c1a5f88p+0, 0x1.5f10p+0, 0x1.ea0p-2 },
 };
 
-constexpr float N_BASES = 0x1p6;
-
 float smol_exp2(float x) {
     if (x >= 128.0f) return INFINITY;
     if (x < -126.0f) return 0.0f;
 
-    float integral = truncf(x);
+    int integral = (int)x;
     float frac = TRUNCATE(fabsf(x - integral), 1.0f);
 
     if (frac != 0.0f && x < 0.0f) {
@@ -107,12 +105,12 @@ float smol_exp2(float x) {
         --integral;
     }
 
-    float base_idx = truncf(frac*N_BASES);
-    double offset = frac - base_idx/N_BASES;
+    size_t base_idx = (size_t)(frac * 0x1p6);
+    double offset = frac - base_idx*0x1p-6;
 
-    const double* cc = COEFS[(size_t)base_idx];
+    const double* cc = COEFS[base_idx];
     double poly = cc[0] + offset*cc[1] + approx_square(offset)*cc[2];
-    return ldexp(poly, (int)integral);
+    return ldexp(poly, integral);
 }
 
 union fp32_int {
