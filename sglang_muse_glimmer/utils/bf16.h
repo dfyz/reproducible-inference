@@ -3,7 +3,9 @@
 #include <stdint.h>
 #include <string.h>
 
-typedef uint16_t bf16;
+typedef struct {
+    uint16_t raw;
+} bf16;
 
 float to_float(bf16 x) {
     float res = 0.0f;
