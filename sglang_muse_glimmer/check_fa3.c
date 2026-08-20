@@ -6,6 +6,9 @@
 #include "utils/minmax.h"
 #include "utils/tc.h"
 
+// TODO: rewrite MUFU.RCP properly.
+#include "../ptx_math_recip.h"
+
 #include <stdint.h>
 #include <stdio.h>
 
@@ -102,10 +105,9 @@ void compute_query_head(
     }
 
     // Make the final output correction.
-    float final_sum = (s_sums[0] + s_sums[2]) + (s_sums[1] + s_sums[3]);
+    float final_sum = ptxm_rcp_sm5x((s_sums[0] + s_sums[2]) + (s_sums[1] + s_sums[3]));
     for (size_t ii = 0; ii < HEAD_DIM; ++ii) {
-        // TODO: use MUFU.RCP here.
-        out[ii] = to_bf16(to_float(out[ii]) / final_sum);
+        out[ii] = to_bf16(to_float(out[ii]) * final_sum);
     }
 }
 
