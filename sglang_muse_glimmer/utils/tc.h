@@ -48,10 +48,11 @@ float __tc_bf16_fp32(float c, const bf16* a, const bf16* b, size_t n_elems) {
         }
 
         double magic = ldexp(0x1p27, max_exp);
-        c = shift(c, magic);
+        double acc = shift(c, magic);
         for (size_t ii = 0; ii < K_DIM; ++ii) {
-            c += shift(addends[ii], magic);
+            acc += shift(addends[ii], magic);
         }
+        c = acc;
     }
 
     return c;
