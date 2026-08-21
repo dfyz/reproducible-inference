@@ -51,8 +51,9 @@ void compute_query_head(
 ) {
     constexpr size_t N_SUMS = 4;
 
-    float logits[KV_TILE];
-    bf16  scores[KV_TILE];
+    float logits [KV_TILE];
+    bf16  scores [KV_TILE];
+    float out_raw[KV_TILE] = {};
     float l_max = -INFINITY;
     float s_sums[N_SUMS] = {};
 
@@ -95,19 +96,20 @@ void compute_query_head(
         // 4. Scale the output, do the Scores@V GEMM.
         for (size_t ii = 0; ii < HEAD_DIM; ++ii) {
             size_t n_gemm_elems = mins(N_KV - kv_blk_start, KV_TILE);
-            out[ii] = to_bf16(tc_bf16_fp32(
-                to_float(out[ii]) * score_scale,
+            out_raw[ii] = tc_bf16_fp32(
+                out_raw[ii] * score_scale,
                 scores,
                 vs[ii] + kv_blk_start,
                 n_gemm_elems
-            ));
+            );
         }
     }
 
     // Make the final output correction.
     float final_sum = ptxm_rcp_sm5x((s_sums[0] + s_sums[2]) + (s_sums[1] + s_sums[3]));
+
     for (size_t ii = 0; ii < HEAD_DIM; ++ii) {
-        out[ii] = to_bf16(to_float(out[ii]) * final_sum);
+        out[ii] = to_bf16(out_raw[ii] * final_sum);
     }
 }
 
@@ -132,7 +134,7 @@ int main(int argc, char** argv) {
                 float our = to_float(out[ii]);
                 if (ref != our) {
                     printf(
-                        "(%zu, %zu, %zu): %.13a vs %.13a\n",
+                        "(%zu, %zu, %zu): %a vs %a\n",
                         qh, qi, ii, ref, our
                     );
                 }
