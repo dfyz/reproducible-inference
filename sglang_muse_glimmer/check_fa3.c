@@ -122,6 +122,7 @@ int main(int argc, char** argv) {
 
     struct InOuts* io = load_file(argv[1], sizeof(struct InOuts));
 
+    #pragma omp parallel for
     for (size_t qh = 0; qh < N_Q_HEADS; ++qh) {
         size_t kvh = qh / (N_Q_HEADS / N_KV_HEADS);
         for (size_t qi = 0; qi < N_Q; ++qi) {
