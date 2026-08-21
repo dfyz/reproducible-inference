@@ -89,8 +89,9 @@ void compute_query_head(
         // 3. Exponentiate the scores, update the score sums.
         float max_scaled = l_max * QK_SCALE;
         for (size_t ii = 0; ii < KV_TILE; ++ii) {
-            scores[ii] = to_bf16(ex2(fmaf(logits[ii], QK_SCALE, -max_scaled)));
-            s_sums[ii % 8 / 2] += to_float(scores[ii]);
+            float score = ex2(fmaf(logits[ii], QK_SCALE, -max_scaled));
+            scores[ii] = to_bf16(score);
+            s_sums[ii % 8 / 2] += score;
         }
 
         // 4. Scale the output, do the Scores@V GEMM.
@@ -106,10 +107,11 @@ void compute_query_head(
     }
 
     // Make the final output correction.
-    float final_sum = ptxm_rcp_sm5x((s_sums[0] + s_sums[2]) + (s_sums[1] + s_sums[3]));
+    float final_sum = (s_sums[0] + s_sums[2]) + (s_sums[1] + s_sums[3]);
+    float final_sum_inv = ptxm_rcp_sm5x(final_sum);
 
     for (size_t ii = 0; ii < HEAD_DIM; ++ii) {
-        out[ii] = to_bf16(out_raw[ii] * final_sum);
+        out[ii] = to_bf16(out_raw[ii] * final_sum_inv);
     }
 }
 
