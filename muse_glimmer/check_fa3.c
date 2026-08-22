@@ -15,11 +15,9 @@
 #include <err.h>
 #include <sys/types.h>
 
-// TODO: support global attention, too.
-constexpr bool IS_LOCAL = true;
-
-constexpr size_t N_Q = 8192;
-constexpr size_t N_KV = N_Q + 1;
+#if !defined(IS_LOCAL) || !defined(N_Q) || !defined(N_KV) || !defined(QK_SCALE)
+#error "Define IS_LOCAL, N_Q, N_KV, and QK_SCALE"
+#endif
 
 constexpr size_t N_Q_HEADS = 32;
 constexpr size_t N_KV_HEADS = 2;
@@ -29,9 +27,6 @@ constexpr size_t KV_TILE = 128;
 
 // Not including the token itself.
 constexpr size_t WINDOW_SIZE = 2047;
-
-// 3.87 (qk_scale_factor from the HF config) / sqrt(128) * log_2(e)
-constexpr float QK_SCALE = 0x1.f95614p-2f;
 
 struct InOuts {
     bf16 q  [N_Q_HEADS] [N_Q]     [HEAD_DIM];
@@ -47,7 +42,8 @@ void compute_query_head(
     const bf16 q  [HEAD_DIM],
     bf16       out[HEAD_DIM],
     const bf16 ks [N_KV][HEAD_DIM],
-    const bf16 vs [HEAD_DIM][N_KV]
+    const bf16 vs [HEAD_DIM][N_KV],
+    float qk_scale
 ) {
     constexpr size_t N_SUMS         = 4;
     constexpr size_t N_ELEM_PER_SUM = 2;
@@ -82,12 +78,12 @@ void compute_query_head(
         }
 
         // 2. Scale the previous score sums.
-        float max_scaled = l_max * QK_SCALE;
-        float score_scale = ex2((prev_l_max - l_max)*QK_SCALE);
+        float max_scaled = l_max * qk_scale;
+        float score_scale = ex2((prev_l_max - l_max)*qk_scale);
 
         // 3. Exponentiate the scores, update the score sums.
         for (size_t ii = 0; ii < KV_TILE; ++ii) {
-            float score = ex2(fmaf(logits[ii], QK_SCALE, -max_scaled));
+            float score = ex2(fmaf(logits[ii], qk_scale, -max_scaled));
             scores[ii] = to_bf16(score);
 
             size_t qq = ii / N_ELEM_PER_SUM;
@@ -127,6 +123,8 @@ int main(int argc, char** argv) {
         errx(42, "Provide a path to the file with inputs/outputs");
     }
 
+    const float qk_scale = (float)((float)(QK_SCALE / sqrt(128)) * log2f(expf(1.0f)));
+
     struct InOuts* io = load_file(argv[1], sizeof(struct InOuts));
 
     #pragma omp parallel for
@@ -137,7 +135,7 @@ int main(int argc, char** argv) {
             auto out = OUR_OUT[qh][qi];
             auto ks  = io->k[kvh];
             auto vs  = io->v[kvh];
-            compute_query_head(qi, q, out, ks, vs);
+            compute_query_head(qi, q, out, ks, vs, qk_scale);
 
             for (size_t ii = 0; ii < HEAD_DIM; ++ii) {
                 float ref = to_float(io->out[qh][qi][ii]);
