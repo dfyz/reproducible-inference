@@ -49,7 +49,8 @@ void compute_query_head(
     const bf16 ks [N_KV][HEAD_DIM],
     const bf16 vs [HEAD_DIM][N_KV]
 ) {
-    constexpr size_t N_SUMS = 4;
+    constexpr size_t N_SUMS         = 4;
+    constexpr size_t N_ELEM_PER_SUM = 2;
 
     float logits [KV_TILE];
     bf16  scores [KV_TILE];
@@ -81,17 +82,20 @@ void compute_query_head(
         }
 
         // 2. Scale the previous score sums.
+        float max_scaled = l_max * QK_SCALE;
         float score_scale = ex2((prev_l_max - l_max)*QK_SCALE);
-        for (size_t ii = 0; ii < N_SUMS; ++ii) {
-            s_sums[ii] *= score_scale;
-        }
 
         // 3. Exponentiate the scores, update the score sums.
-        float max_scaled = l_max * QK_SCALE;
         for (size_t ii = 0; ii < KV_TILE; ++ii) {
             float score = ex2(fmaf(logits[ii], QK_SCALE, -max_scaled));
             scores[ii] = to_bf16(score);
-            s_sums[ii % 8 / 2] += score;
+
+            // First score is FMA-fused with sum rescaling.
+            size_t sum_idx = ii / N_ELEM_PER_SUM % N_SUMS;
+            float factor = ((ii / N_ELEM_PER_SUM < N_SUMS) && (ii % N_ELEM_PER_SUM == 0))
+                         ? score_scale
+                         : 1.0f;
+            s_sums[sum_idx] = fmaf(s_sums[sum_idx], factor, score);
         }
 
         // 4. Scale the output, do the Scores@V GEMM.
