@@ -90,12 +90,15 @@ void compute_query_head(
             float score = ex2(fmaf(logits[ii], QK_SCALE, -max_scaled));
             scores[ii] = to_bf16(score);
 
-            // First score is FMA-fused with sum rescaling.
             size_t qq = ii / N_ELEM_PER_SUM;
             size_t rr = ii % N_ELEM_PER_SUM;
             size_t sum_idx = qq % N_SUMS;
-            float factor = (qq < N_SUMS && rr == 0) ? score_scale : 1.0f;
-            s_sums[sum_idx] = fmaf(s_sums[sum_idx], factor, score);
+            // First score is FMA-fused with sum rescaling.
+            if (qq < N_SUMS && rr == 0) {
+                s_sums[sum_idx] = fmaf(s_sums[sum_idx], score_scale, score);
+            } else {
+                s_sums[sum_idx] += score;
+            }
         }
 
         // 4. Scale the output, do the Scores@V GEMM.
