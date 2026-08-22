@@ -91,10 +91,10 @@ void compute_query_head(
             scores[ii] = to_bf16(score);
 
             // First score is FMA-fused with sum rescaling.
-            size_t sum_idx = ii / N_ELEM_PER_SUM % N_SUMS;
-            float factor = ((ii / N_ELEM_PER_SUM < N_SUMS) && (ii % N_ELEM_PER_SUM == 0))
-                         ? score_scale
-                         : 1.0f;
+            size_t qq = ii / N_ELEM_PER_SUM;
+            size_t rr = ii % N_ELEM_PER_SUM;
+            size_t sum_idx = qq % N_SUMS;
+            float factor = (qq < N_SUMS && rr == 0) ? score_scale : 1.0f;
             s_sums[sum_idx] = fmaf(s_sums[sum_idx], factor, score);
         }
 
