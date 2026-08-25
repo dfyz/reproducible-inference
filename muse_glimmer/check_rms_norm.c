@@ -6,6 +6,7 @@
 // TODO: rewrite MUFU.RSQRT properly.
 #include "../ptx_math_rsqrt.h"
 
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -25,8 +26,6 @@ struct InOuts {
     bf16 out[N_ROWS][DIM];
     bf16 w  [DIM];
 };
-
-typeof((struct InOuts){0}.out) OUR_OUT;
 
 float warp_reduce(float vals[WARP_SIZE]) {
     // Yeah, flashinfer really iterates over offsets in increasing order.
