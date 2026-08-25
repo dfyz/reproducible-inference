@@ -1,4 +1,4 @@
-// gcc -std=c23 -O2 -frounding-math -march=native -lm -o check_fa3 check_fa3.c
+// gcc -std=c23 -O2 -frounding-math -march=native -lm -o check_fa3 check_fa3.c -g -fopenmp -DIS_LOCAL=true -DN_Q=8192 -DN_KV=8192 -DQK_SCALE=1
 
 #include "utils/bf16.h"
 #include "utils/ex2.h"
@@ -13,7 +13,6 @@
 #include <stdio.h>
 
 #include <err.h>
-#include <sys/types.h>
 
 #if !defined(IS_LOCAL) || !defined(N_Q) || !defined(N_KV) || !defined(QK_SCALE)
 #error "Define IS_LOCAL, N_Q, N_KV, and QK_SCALE"
