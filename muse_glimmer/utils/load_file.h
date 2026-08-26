@@ -21,7 +21,7 @@ void* load_file(const char* file_name, size_t n_bytes) {
         errx(3, "Expected a file of %zu bytes, got %zu\n", n_bytes, st.st_size);
     }
 
-    void* res = mmap(NULL, n_bytes, PROT_READ, MAP_SHARED, fd, 0);
+    void* res = mmap(nullptr, n_bytes, PROT_READ, MAP_SHARED, fd, 0);
     if (res == MAP_FAILED) {
         err(4, "Failed to mmap");
     }
