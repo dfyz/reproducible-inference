@@ -1,3 +1,5 @@
+// gcc -std=c23 -O2 -g -march=native -lm -DN_ROWS=9654 -o check_qk_norm check_qk_norm.c
+
 #include "utils/bf16.h"
 #include "utils/load_file.h"
 
