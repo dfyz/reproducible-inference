@@ -115,3 +115,9 @@ float ex2(float x) {
     fesetround(prev_mode);
     return res;
 }
+
+constexpr float LOG2_E = 0x1.715476p+0f;
+
+float ex_fast(float x) {
+    return ex2(LOG2_E * x);
+}

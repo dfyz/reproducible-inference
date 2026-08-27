@@ -1,7 +1,7 @@
 // gcc -std=c23 -O2 -frounding-math -march=native -lm -o check_fa3 check_fa3.c -g -fopenmp -DIS_LOCAL=true -DN_Q=8192 -DN_KV=8192 -DQK_SCALE=1
 
 #include "utils/bf16.h"
-#include "utils/ex2.h"
+#include "utils/ex.h"
 #include "utils/load_file.h"
 #include "utils/minmax.h"
 #include "utils/tc.h"

@@ -1,5 +1,3 @@
-// gcc -std=c23 -O2 -march=native -DN_ROWS=8192 -lm -o check_fused_sigmoid_mul check_fused_sigmoid_mul.c
-
 #include "utils/bf16.h"
 #include "utils/ex.h"
 #include "utils/load_file.h"
@@ -14,12 +12,11 @@
 #error "Define N_ROWS"
 #endif
 
-constexpr size_t DIM = 4096;
+constexpr size_t DIM = 19968;
 
 struct InOuts {
-    bf16 attn[N_ROWS][DIM];
-    bf16 out [N_ROWS][DIM];
-    bf16 gate[N_ROWS][DIM];
+    bf16 inp[N_ROWS][2*DIM];
+    bf16  out[N_ROWS][DIM];
 };
 
 int main(int argc, char** argv) {
@@ -33,9 +30,10 @@ int main(int argc, char** argv) {
         for (size_t cc = 0; cc < DIM; ++cc) {
             float ref = to_float(io->out[rr][cc]);
 
-            float attn = to_float(io->attn[rr][cc]);
-            float gate = to_float(io->gate[rr][cc]);
-            float our = attn * sigmoid_fast(gate);
+            float to_act  = to_float(io->inp[rr][cc]);
+            float to_gate = to_float(io->inp[rr][cc + DIM]);
+
+            float our = to_act * sigmoid_fast(to_act) * to_gate;
             our = to_float(to_bf16(our));
 
             if (ref != our) {

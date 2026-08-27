@@ -1,3 +1,5 @@
+#pragma once
+
 #include "ptx_math_common.h"
 
 #define RCP_M 7
