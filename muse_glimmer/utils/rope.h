@@ -1,16 +1,8 @@
-// gcc -std=c23 -O2 -march=native -o check_cos_sin_cache check_cos_sin_cache.c -lm
-
-#include "utils/load_file.h"
+#pragma once
 
 #include <math.h>
-#include <stddef.h>
-#include <stdio.h>
 #include <stdint.h>
-#include <stdlib.h>
 
-#include <err.h>
-
-constexpr size_t MAX_LEN = 1ull << 17;
 constexpr size_t MAX_DIM = 64;
 
 constexpr float INV_FREQS[MAX_DIM] = {
@@ -80,11 +72,6 @@ constexpr float INV_FREQS[MAX_DIM] = {
     0x1.4985fep-19f,
 };
 
-struct InOuts {
-    float cosines[MAX_LEN][MAX_DIM];
-    float   sines[MAX_LEN][MAX_DIM];
-};
-
 float sincos_approx(float x, bool is_cosine) {
     float k = rintf(x * 0x1.45f306p-1f);
 
@@ -111,28 +98,11 @@ float sincos_approx(float x, bool is_cosine) {
     return res;
 }
 
-int main(int argc, char** argv) {
-    if (argc != 2) {
-        errx(42, "Provide a path to the file with inputs/outputs");
-    }
+void rotate(float x, float y, float pos, size_t head_pos, float* out_x, float* out_y) {
+    float angle  = pos * INV_FREQS[head_pos];
+    float cosine = sincos_approx(angle, true);
+    float   sine = sincos_approx(angle, false);
 
-    struct InOuts* io = load_file(argv[1], sizeof(struct InOuts));
-
-    for (size_t pos = 0.0f; pos < MAX_LEN; ++pos) {
-        for (size_t dd = 0; dd < MAX_DIM; ++dd) {
-            float angle = pos * INV_FREQS[dd];
-
-            float ref_cos = io->cosines[pos][dd];
-            float our_cos = sincos_approx(angle, true);
-            if (ref_cos != our_cos) {
-                printf("cosine at pos=%zu, dim=%zu: %a -> %a vs. %a\n", pos, dd, angle, ref_cos, our_cos);
-            }
-
-            float ref_sin = io->sines[pos][dd];
-            float our_sin = sincos_approx(angle, false);
-            if (ref_sin != our_sin) {
-                printf("sine at pos=%zu, dim=%zu: %a -> %a vs. %a\n", pos, dd, angle, ref_sin, our_sin);
-            }
-        }
-    }
+    *out_x = fmaf(x, cosine, -y*sine);
+    *out_y = fmaf(y, cosine, +x*sine);
 }

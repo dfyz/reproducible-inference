@@ -50,13 +50,11 @@ float sum_row(const bf16 head[HEAD_SIZE]) {
     return warp_vals[0];
 }
 
-void check_head(const char* label, size_t rr, size_t hh, bf16 head[HEAD_SIZE], const bf16 ref_out[HEAD_SIZE]) {
+void check_head(const char* label, size_t rr, size_t hh, const bf16 head[HEAD_SIZE], const bf16 ref_out[HEAD_SIZE]) {
     float sum = sum_row(head);
     float rstd = ptxm_rsqrt_sm5x(fmaf(sum, 1.0f/HEAD_SIZE, EPS));
     for (size_t cc = 0; cc < HEAD_SIZE; ++cc) {
         float ref = to_float(ref_out[cc]);
-        ref = to_float(to_bf16(ref));
-
         float our = to_float(head[cc]) * rstd;
         our = to_float(to_bf16(our));
 
