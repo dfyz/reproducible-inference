@@ -18,11 +18,13 @@
 #error "Define IS_LOCAL, N_Q, N_KV, and QK_SCALE"
 #endif
 
-constexpr size_t N_Q_HEADS = 32;
+constexpr size_t N_Q_HEADS  = 32;
 constexpr size_t N_KV_HEADS = 2;
 
 constexpr size_t HEAD_DIM = 128;
-constexpr size_t KV_TILE = 128;
+constexpr size_t KV_TILE  = 128;
+// The denominator accounts for the PackGQA optimization from the FA3 paper.
+constexpr size_t Q_TILE   = 128 / (N_Q_HEADS/N_KV_HEADS);
 
 // Not including the token itself.
 constexpr size_t WINDOW_SIZE = 2047;
@@ -35,6 +37,10 @@ struct InOuts {
 };
 
 typeof((struct InOuts){0}.out) OUR_OUT;
+
+size_t sat_sub(size_t x, size_t y) {
+    return x > y ? x - y : 0;
+}
 
 void compute_query_head(
     size_t qi,
@@ -54,21 +60,20 @@ void compute_query_head(
     float s_sums[N_SUMS] = {};
 
     size_t last_kv_pos  = qi + N_KV - N_Q;
-    size_t first_kv_pos = IS_LOCAL && last_kv_pos > WINDOW_SIZE
-                        ? last_kv_pos - WINDOW_SIZE
+    size_t first_kv_pos = IS_LOCAL
+                        ? sat_sub(last_kv_pos, WINDOW_SIZE)
+                        : 0;
+    size_t offset       = IS_LOCAL
+                        ? sat_sub(first_kv_pos, qi%Q_TILE)
                         : 0;
 
-    size_t last_kv_block  = last_kv_pos  / KV_TILE;
-    size_t first_kv_block = first_kv_pos / KV_TILE;
-    size_t n_blocks       = last_kv_block - first_kv_block + 1;
-
-    for (size_t bi = 0; bi < n_blocks; ++bi) {
-        size_t kv_blk_start = (last_kv_block - bi) * KV_TILE;
+    for (ptrdiff_t ti = (last_kv_pos - offset)/KV_TILE; ti >= 0; --ti) {
+        size_t kv_tile_start = ti*KV_TILE + offset;
 
         // 1. Do the Q@K GEMM, update the score maximum.
         float prev_l_max = l_max;
         for (size_t ii = 0; ii < KV_TILE; ++ii) {
-            size_t kvi = kv_blk_start + ii;
+            size_t kvi = kv_tile_start + ii;
             float score = first_kv_pos <= kvi && kvi <= last_kv_pos
                         ? tc_bf16_fp32(0.0f, q, ks[kvi], HEAD_DIM)
                         : -INFINITY;
@@ -98,11 +103,11 @@ void compute_query_head(
 
         // 4. Scale the output, do the Scores@V GEMM.
         for (size_t ii = 0; ii < HEAD_DIM; ++ii) {
-            size_t n_gemm_elems = mins(N_KV - kv_blk_start, KV_TILE);
+            size_t n_gemm_elems = mins(N_KV - kv_tile_start, KV_TILE);
             out_raw[ii] = tc_bf16_fp32(
                 out_raw[ii] * score_scale,
                 scores,
-                vs[ii] + kv_blk_start,
+                vs[ii] + kv_tile_start,
                 n_gemm_elems
             );
         }
