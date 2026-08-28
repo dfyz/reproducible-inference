@@ -98,11 +98,14 @@ float sincos_approx(float x, bool is_cosine) {
     return res;
 }
 
-void rotate(float x, float y, float pos, size_t head_pos, float* out_x, float* out_y) {
+void rotate(float* x, float* y, float pos, size_t head_pos) {
     float angle  = pos * INV_FREQS[head_pos];
     float cosine = sincos_approx(angle, true);
     float   sine = sincos_approx(angle, false);
 
-    *out_x = fmaf(x, cosine, -y*sine);
-    *out_y = fmaf(y, cosine, +x*sine);
+    float old_x = *x;
+    float old_y = *y;
+
+    *x = fmaf(old_x, cosine, -old_y * sine);
+    *y = fmaf(old_y, cosine, +old_x * sine);
 }

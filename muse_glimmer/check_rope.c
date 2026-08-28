@@ -32,12 +32,10 @@ void rotate_head(float pos, const bf16 head[HEAD_SIZE], const bf16 ref_out[HEAD_
     for (size_t head_pos = 0; head_pos < HEAD_SIZE/2; ++head_pos) {
         float x = to_float(head[head_pos]);
         float y = to_float(head[head_pos + HEAD_SIZE/2]);
+        rotate(&x, &y, pos, head_pos);
 
-        float our_x, our_y;
-        rotate(x, y, pos, head_pos, &our_x, &our_y);
-
-        our_x = to_float(to_bf16(our_x));
-        our_y = to_float(to_bf16(our_y));
+        float our_x = to_float(to_bf16(x));
+        float our_y = to_float(to_bf16(y));
 
         float ref_x = to_float(ref_out[head_pos]);
         float ref_y = to_float(ref_out[head_pos + HEAD_SIZE/2]);
