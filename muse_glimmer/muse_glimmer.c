@@ -298,27 +298,26 @@ void attn(vec x, size_t pos, size_t layer_idx, const struct layer* l) {
     bf16 q[N_Q_HEADS][HEAD_DIM];
     auto k = K_CACHE[layer_idx];
     auto v = V_CACHE[layer_idx];
+    // Every 4th layer is local.
+    const bool is_local = layer_idx % 4 != 3;
 
+    #pragma omp parallel for
     for (size_t hh = 0; hh < N_Q_HEADS; ++hh) {
         for (size_t ii = 0; ii < HEAD_DIM; ++ii) {
             q[hh][ii] = to_bf16(tc_bf16_fp32(0.0f, x, l->attn_q[hh][ii], DIM));
         }
         qk_norm(q[hh]);
         rotate_head(pos, q[hh]);
-    }
 
-    for (size_t hh = 0; hh < N_KV_HEADS; ++hh) {
-        for (size_t ii = 0; ii < HEAD_DIM; ++ii) {
-            k[hh][pos][ii]  = to_bf16(tc_bf16_fp32(0.0f, x, l->attn_k[hh][ii], DIM));
-            v[hh][ii] [pos] = to_bf16(tc_bf16_fp32(0.0f, x, l->attn_v[hh][ii], DIM));
+        if (hh < N_KV_HEADS) {
+            for (size_t ii = 0; ii < HEAD_DIM; ++ii) {
+                k[hh][pos][ii]  = to_bf16(tc_bf16_fp32(0.0f, x, l->attn_k[hh][ii], DIM));
+                v[hh][ii] [pos] = to_bf16(tc_bf16_fp32(0.0f, x, l->attn_v[hh][ii], DIM));
+            }
+            qk_norm(k[hh][pos]);
+            rotate_head(pos, k[hh][pos]);
         }
-        qk_norm(k[hh][pos]);
-        rotate_head(pos, k[hh][pos]);
-    }
 
-    // Every 4th layer is local.
-    const bool is_local = layer_idx % 4 != 3;
-    for (size_t hh = 0; hh < N_Q_HEADS; ++hh) {
         size_t kvh = hh / (N_Q_HEADS / N_KV_HEADS);
         attn_head(is_local, pos, q[hh], k[kvh], v[kvh]);
 
@@ -328,9 +327,10 @@ void attn(vec x, size_t pos, size_t layer_idx, const struct layer* l) {
         }
     }
 
+    #pragma omp parallel for
     for (size_t ii = 0; ii < DIM; ++ii) {
         float acc = 0.0f;
-        for (size_t hh = 0; hh < DIM; ++hh) {
+        for (size_t hh = 0; hh < N_Q_HEADS; ++hh) {
             acc = tc_bf16_fp32(acc, q[hh], l->attn_o[ii][hh], HEAD_DIM);
         }
         x[ii] = to_bf16(acc);
