@@ -338,7 +338,18 @@ void attn(vec x, size_t pos, size_t layer_idx, const struct layer* l) {
 }
 
 void mlp(vec x, const struct layer* l) {
-    // TODO: mlp
+    bf16 inter[INTERMEDIATE_DIM];
+
+    for (size_t ii = 0; ii < INTERMEDIATE_DIM; ++ii) {
+        float to_act =  to_float(to_bf16(tc_bf16_fp32(0.0f, x, l->mlp_up[ii],   DIM)));
+        float to_gate = to_float(to_bf16(tc_bf16_fp32(0.0f, x, l->mlp_gate[ii], DIM)));
+
+        inter[ii] = to_bf16(to_act * sigmoid_fast(to_act) * to_gate);
+    }
+
+    for (size_t ii = 0; ii < DIM; ++ii) {
+        x[ii] = to_bf16(tc_bf16_fp32(0.0f, inter, l->mlp_down[ii], INTERMEDIATE_DIM));
+    }
 }
 
 void run_layer(vec x, size_t pos, size_t n_q, size_t n_kv, size_t layer_idx, const struct layer* l) {
