@@ -352,7 +352,19 @@ void mlp(vec x, const struct layer* l) {
     }
 }
 
-void run_layer(vec x, size_t pos, size_t n_q, size_t n_kv, size_t layer_idx, const struct layer* l) {
+void run_layer(vec x, size_t pos, size_t layer_idx, const struct model* m) {
+    constexpr size_t P1_LAYER_INDEXES[N_LAYERS_PART_1] = {
+        0, 1, 12, 23, 34, 40, 41, 42, 43, 44,
+        2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14,
+        15, 16, 17, 18, 19, 20, 21, 22, 24, 25,
+        26, 27, 28, 29, 30, 31, 32, 33, 35, 36,
+        37, 38, 39
+    };
+
+    auto l = layer_idx < N_LAYERS_PART_1
+           ? &m->p1->layers[P1_LAYER_INDEXES[layer_idx]]
+           : &m->p2->layers[layer_idx];
+
     vec residual;
     memcpy(residual, x, sizeof(residual));
 
@@ -370,6 +382,24 @@ void run_layer(vec x, size_t pos, size_t n_q, size_t n_kv, size_t layer_idx, con
 int main() {
     auto model = load_model();
 
-    // TODO: input actual tokens
-    printf("%a\n", to_float(model.p2->layers[6].attn_gate[11][111][1111]));
+    size_t n_tokens;
+    scanf("%zu", &n_tokens);
+
+    vec x;
+    for (size_t pos = 0; pos < n_tokens; ++pos) {
+        size_t token;
+        scanf("%zu", &token);
+        memcpy(&x, model.p1->embeds[token], sizeof(x));
+
+        for (size_t li = 0; li < N_LAYERS; ++li) {
+            fprintf(stderr, "layer %zu\n", li);
+
+            run_layer(x, pos, li, &model);
+        }
+
+        for (size_t ii = 0; ii < DIM; ++ii) {
+            printf("%a ", to_float(x[ii]));
+        }
+        puts("");
+    }
 }
