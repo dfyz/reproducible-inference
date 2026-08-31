@@ -11,6 +11,7 @@
 #include <err.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <math.h>
@@ -71,14 +72,19 @@ void* load_st(const char* file_name, void* addr, size_t n_bytes) {
         err(1, "failed to open %s", file_name);
     }
 
-    uint64_t h_len;
-    if (read(fd, &h_len, sizeof(h_len)) != sizeof(h_len)) {
-        err(2, "failed to read the header length from %s", file_name);
+    struct stat st;
+    if (fstat(fd, &st) < 0) {
+        err(2, "failed to stat %s", file_name);
     }
 
-    char* res = mmap(addr, n_bytes, PROT_READ, MAP_SHARED, fd, 0);
+    uint64_t h_len;
+    if (read(fd, &h_len, sizeof(h_len)) != sizeof(h_len)) {
+        err(3, "failed to read the header length from %s", file_name);
+    }
+
+    char* res = mmap(addr, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
     if (res == MAP_FAILED) {
-        err(3, "failed to mmap %s", file_name);
+        err(4, "failed to mmap %s", file_name);
     }
     return res + sizeof(h_len) + h_len;
 }
@@ -340,6 +346,7 @@ void attn(vec x, size_t pos, size_t layer_idx, const struct layer* l) {
 void mlp(vec x, const struct layer* l) {
     bf16 inter[INTERMEDIATE_DIM];
 
+    #pragma omp parallel for
     for (size_t ii = 0; ii < INTERMEDIATE_DIM; ++ii) {
         float to_act =  to_float(to_bf16(tc_bf16_fp32(0.0f, x, l->mlp_up[ii],   DIM)));
         float to_gate = to_float(to_bf16(tc_bf16_fp32(0.0f, x, l->mlp_gate[ii], DIM)));
@@ -347,6 +354,7 @@ void mlp(vec x, const struct layer* l) {
         inter[ii] = to_bf16(to_act * sigmoid_fast(to_act) * to_gate);
     }
 
+    #pragma omp parallel for
     for (size_t ii = 0; ii < DIM; ++ii) {
         x[ii] = to_bf16(tc_bf16_fp32(0.0f, inter, l->mlp_down[ii], INTERMEDIATE_DIM));
     }
