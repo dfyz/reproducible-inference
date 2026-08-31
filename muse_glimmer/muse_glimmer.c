@@ -106,6 +106,13 @@ constexpr float POST_NORM_EPS = 1e-08f;
 
 typedef bf16 vec[DIM];
 
+void dump_out(vec x) {
+    for (size_t ii = 0; ii < DIM; ++ii) {
+        printf("%a ", to_float(x[ii]));
+    }
+    fflush(stdout);
+}
+
 constexpr size_t WARP_SIZE = 32;
 
 // RMSNorm
@@ -150,12 +157,20 @@ float sum_row(const vec x) {
     return (warp_vals[0] + warp_vals[1]) + (warp_vals[2] + warp_vals[3]);
 }
 
-void rms_norm(vec x, float eps, const bf16 w[DIM]) {
+float get_weight(const bf16* w, size_t ii) {
+    if (w == nullptr) {
+        return 1.0f;
+    }
+    // +1 is performed in BF16 when loading the tensors.
+    return to_float(to_bf16(to_float(w[ii]) + 1.0f));
+}
+
+void rms_norm(vec x, float eps, const bf16* w) {
     float sum = sum_row(x);
     float rstd = ptxm_rsqrt_sm5x(sum / DIM + eps);
 
     for (size_t ii = 0; ii < DIM; ++ii) {
-        float normed = to_float(x[ii]) * rstd * to_float(w[ii]);
+        float normed = to_float(x[ii]) * rstd * get_weight(w, ii);
         x[ii] = to_bf16(normed);
     }
 }
@@ -397,7 +412,9 @@ int main() {
     for (size_t pos = 0; pos < n_tokens; ++pos) {
         size_t token;
         scanf("%zu", &token);
+
         memcpy(&x, model.p1->embeds[token], sizeof(x));
+        rms_norm(x, PRE_NORM_EPS, nullptr);
 
         for (size_t li = 0; li < N_LAYERS; ++li) {
             fprintf(stderr, "layer %zu\n", li);
@@ -405,9 +422,8 @@ int main() {
             run_layer(x, pos, li, &model);
         }
 
-        for (size_t ii = 0; ii < DIM; ++ii) {
-            printf("%a ", to_float(x[ii]));
-        }
+        dump_out(x);
+
         puts("");
     }
 }
