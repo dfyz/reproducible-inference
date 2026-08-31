@@ -2,8 +2,10 @@
 
 #include "utils/bf16.h"
 #include "utils/rope.h"
+#include "utils/sigmoid.h"
 #include "utils/tc.h"
 
+#include "../ptx_math_recip.h"
 #include "../ptx_math_rsqrt.h"
 
 #include <err.h>
@@ -90,8 +92,8 @@ struct model load_model() {
 
 // COMMON CONSTANTS AND GLOBAL DATA
 constexpr size_t MAX_SEQ_LEN = 16384;
-bf16 K_CACHE[N_LAYERS][MAX_SEQ_LEN][N_Q_HEADS] [HEAD_DIM];
-bf16 V_CACHE[N_LAYERS][MAX_SEQ_LEN][N_KV_HEADS][HEAD_DIM];
+bf16 K_CACHE[N_LAYERS][N_KV_HEADS][MAX_SEQ_LEN][HEAD_DIM];
+bf16 V_CACHE[N_LAYERS][N_KV_HEADS][HEAD_DIM][MAX_SEQ_LEN];
 
 constexpr float PRE_NORM_EPS  = 1e-05f;
 constexpr float POST_NORM_EPS = 1e-08f;
@@ -183,13 +185,14 @@ void qk_norm(bf16 head[HEAD_DIM]) {
     }
 }
 
-// FORWARD FOR ONE LAYER
+// RESIDUAL ADDITION
 void add(vec acc, const vec x) {
     for (size_t ii = 0; ii < DIM; ++ii) {
         acc[ii] = to_bf16(to_float(acc[ii]) + to_float(x[ii]));
     }
 }
 
+// RoPE WRAPPER
 void rotate_head(size_t pos, bf16 head[HEAD_DIM]) {
     for (size_t ii = 0; ii < HEAD_DIM/2; ++ii) {
         float x = to_float(head[ii]);
@@ -200,10 +203,101 @@ void rotate_head(size_t pos, bf16 head[HEAD_DIM]) {
     }
 }
 
+// ATTENTION
+constexpr float QK_SCALE     = 3.87f;
+constexpr size_t KV_TILE     = 128;
+// The denominator accounts for the PackGQA optimization from the FA3 paper.
+constexpr size_t Q_TILE      = 128 / (N_Q_HEADS/N_KV_HEADS);
+// Not including the token itself.
+constexpr size_t WINDOW_SIZE = 2047;
+
+size_t sat_sub(size_t x, size_t y) {
+    return x > y ? x - y : 0;
+}
+
+void attn_head(
+    bool is_local,
+    size_t pos,
+          bf16 q [HEAD_DIM],
+    const bf16 ks[MAX_SEQ_LEN][HEAD_DIM],
+    const bf16 vs[HEAD_DIM][MAX_SEQ_LEN]
+) {
+    constexpr size_t N_SUMS         = 4;
+    constexpr size_t N_ELEM_PER_SUM = 2;
+
+    float logits [KV_TILE];
+    bf16  scores [KV_TILE];
+    float out_raw[KV_TILE] = {};
+    float l_max = -INFINITY;
+    float s_sums[N_SUMS] = {};
+
+    size_t last_kv_pos  = pos; // TODO: support starting from non-zero query
+    size_t first_kv_pos = is_local
+                        ? sat_sub(last_kv_pos, WINDOW_SIZE)
+                        : 0;
+    size_t offset       = is_local
+                        ? sat_sub(first_kv_pos, pos%Q_TILE)
+                        : 0;
+
+    for (ptrdiff_t ti = (last_kv_pos - offset)/KV_TILE; ti >= 0; --ti) {
+        size_t kv_tile_start = ti*KV_TILE + offset;
+
+        // 1. Do the Q@K GEMM, update the score maximum.
+        float prev_l_max = l_max;
+        for (size_t ii = 0; ii < KV_TILE; ++ii) {
+            size_t kvi = kv_tile_start + ii;
+            float score = first_kv_pos <= kvi && kvi <= last_kv_pos
+                        ? tc_bf16_fp32(0.0f, q, ks[kvi], HEAD_DIM)
+                        : -INFINITY;
+            logits[ii] = score;
+            l_max = maxf(l_max, score);
+        }
+
+        // 2. Scale the previous score sums.
+        float max_scaled = l_max * QK_SCALE;
+        float score_scale = ex2((prev_l_max - l_max)*QK_SCALE);
+
+        // 3. Exponentiate the scores, update the score sums.
+        for (size_t ii = 0; ii < KV_TILE; ++ii) {
+            float score = ex2(fmaf(logits[ii], QK_SCALE, -max_scaled));
+            scores[ii] = to_bf16(score);
+
+            size_t qq = ii / N_ELEM_PER_SUM;
+            size_t rr = ii % N_ELEM_PER_SUM;
+            size_t sum_idx = qq % N_SUMS;
+            // First score is FMA-fused with sum rescaling.
+            if (qq < N_SUMS && rr == 0) {
+                s_sums[sum_idx] = fmaf(s_sums[sum_idx], score_scale, score);
+            } else {
+                s_sums[sum_idx] += score;
+            }
+        }
+
+        // 4. Scale the output, do the Scores@V GEMM.
+        for (size_t ii = 0; ii < HEAD_DIM; ++ii) {
+            size_t n_gemm_elems = mins(pos + 1 - kv_tile_start, KV_TILE);
+            out_raw[ii] = tc_bf16_fp32(
+                out_raw[ii] * score_scale,
+                scores,
+                vs[ii] + kv_tile_start,
+                n_gemm_elems
+            );
+        }
+    }
+
+    // Make the final output correction.
+    float final_sum = (s_sums[0] + s_sums[2]) + (s_sums[1] + s_sums[3]);
+    float final_sum_inv = ptxm_rcp_sm5x(final_sum);
+
+    for (size_t ii = 0; ii < HEAD_DIM; ++ii) {
+        q[ii] = to_bf16(out_raw[ii] * final_sum_inv);
+    }
+}
+
 void attn(vec x, size_t pos, size_t layer_idx, const struct layer* l) {
     bf16 q[N_Q_HEADS][HEAD_DIM];
-    auto k = K_CACHE[layer_idx][pos];
-    auto v = V_CACHE[layer_idx][pos];
+    auto k = K_CACHE[layer_idx];
+    auto v = V_CACHE[layer_idx];
 
     for (size_t hh = 0; hh < N_Q_HEADS; ++hh) {
         for (size_t ii = 0; ii < HEAD_DIM; ++ii) {
@@ -215,21 +309,39 @@ void attn(vec x, size_t pos, size_t layer_idx, const struct layer* l) {
 
     for (size_t hh = 0; hh < N_KV_HEADS; ++hh) {
         for (size_t ii = 0; ii < HEAD_DIM; ++ii) {
-            k[hh][ii] = to_bf16(tc_bf16_fp32(0.0f, x, l->attn_k[hh][ii], DIM));
-            v[hh][ii] = to_bf16(tc_bf16_fp32(0.0f, x, l->attn_v[hh][ii], DIM));
+            k[hh][pos][ii]  = to_bf16(tc_bf16_fp32(0.0f, x, l->attn_k[hh][ii], DIM));
+            v[hh][ii] [pos] = to_bf16(tc_bf16_fp32(0.0f, x, l->attn_v[hh][ii], DIM));
         }
-        qk_norm(k[hh]);
-        rotate_head(pos, k[hh]);
+        qk_norm(k[hh][pos]);
+        rotate_head(pos, k[hh][pos]);
     }
 
-    // TODO: attention+gating+out projection
+    // Every 4th layer is local.
+    const bool is_local = layer_idx % 4 != 3;
+    for (size_t hh = 0; hh < N_Q_HEADS; ++hh) {
+        size_t kvh = hh / (N_Q_HEADS / N_KV_HEADS);
+        attn_head(is_local, pos, q[hh], k[kvh], v[kvh]);
+
+        for (size_t ii = 0; ii < HEAD_DIM; ++ii) {
+            float gate = tc_bf16_fp32(0.0f, x, l->attn_gate[hh][ii], DIM);
+            q[hh][ii] = to_bf16(to_float(q[hh][ii]) * sigmoid_fast(gate));
+        }
+    }
+
+    for (size_t ii = 0; ii < DIM; ++ii) {
+        float acc = 0.0f;
+        for (size_t hh = 0; hh < DIM; ++hh) {
+            acc = tc_bf16_fp32(acc, q[hh], l->attn_o[ii][hh], HEAD_DIM);
+        }
+        x[ii] = to_bf16(acc);
+    }
 }
 
 void mlp(vec x, const struct layer* l) {
     // TODO: mlp
 }
 
-void run_layer(vec x, size_t pos, size_t layer_idx, const struct layer* l) {
+void run_layer(vec x, size_t pos, size_t n_q, size_t n_kv, size_t layer_idx, const struct layer* l) {
     vec residual;
     memcpy(residual, x, sizeof(residual));
 
