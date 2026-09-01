@@ -208,9 +208,10 @@ void qk_norm(bf16 head[HEAD_DIM]) {
 }
 
 // RESIDUAL ADDITION
-void add(vec acc, const vec x) {
+void add(vec x1, vec x2) {
     for (size_t ii = 0; ii < DIM; ++ii) {
-        acc[ii] = to_bf16(to_float(acc[ii]) + to_float(x[ii]));
+        bf16 val = to_bf16(to_float(x1[ii]) + to_float(x2[ii]));
+        x1[ii] = x2[ii] = val;
     }
 }
 
@@ -388,7 +389,7 @@ void run_layer(vec x, size_t pos, size_t layer_idx, const struct model* m) {
 
     auto l = layer_idx < N_LAYERS_PART_1
            ? &m->p1->layers[P1_LAYER_INDEXES[layer_idx]]
-           : &m->p2->layers[layer_idx];
+           : &m->p2->layers[layer_idx - N_LAYERS_PART_1];
 
     vec residual;
     memcpy(residual, x, sizeof(residual));
@@ -396,11 +397,11 @@ void run_layer(vec x, size_t pos, size_t layer_idx, const struct model* m) {
     rms_norm(x, PRE_NORM_EPS, l->input_ln);
     attn    (x, pos, layer_idx, l);
     rms_norm(x, POST_NORM_EPS, l->post_attn_ln);
-    add     (residual, x);
+    add     (x, residual);
 
-    rms_norm(residual, PRE_NORM_EPS, l->pre_ff_ln);
-    mlp     (residual, l);
-    rms_norm(residual, POST_NORM_EPS, l->post_ff_ln);
+    rms_norm(x, PRE_NORM_EPS, l->pre_ff_ln);
+    mlp     (x, l);
+    rms_norm(x, POST_NORM_EPS, l->post_ff_ln);
     add     (x, residual);
 }
 
@@ -425,7 +426,5 @@ int main() {
         }
 
         dump_out(x);
-
-        puts("");
     }
 }
