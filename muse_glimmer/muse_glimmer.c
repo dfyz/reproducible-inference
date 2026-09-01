@@ -162,7 +162,7 @@ float get_weight(const bf16* w, size_t ii) {
         return 1.0f;
     }
     // +1 is performed in BF16 when loading the tensors.
-    return to_float(to_bf16(to_float(w[ii]) + 1.0f));
+    return trunc_to_bf16(to_float(w[ii]) + 1.0f);
 }
 
 void rms_norm(vec x, float eps, const bf16* w) {
@@ -323,6 +323,16 @@ void attn(vec x, size_t pos, size_t layer_idx, const struct layer* l) {
     const bool is_local = layer_idx % 4 != 3;
 
     #pragma omp parallel for
+    for (size_t hh = 0; hh < N_KV_HEADS; ++hh) {
+        for (size_t ii = 0; ii < HEAD_DIM; ++ii) {
+            k[hh][pos][ii]  = to_bf16(tc_bf16_fp32(0.0f, x, l->attn_k[hh][ii], DIM));
+            v[hh][ii] [pos] = to_bf16(tc_bf16_fp32(0.0f, x, l->attn_v[hh][ii], DIM));
+        }
+        qk_norm(k[hh][pos]);
+        rotate_head(pos, k[hh][pos]);
+    }
+
+    #pragma omp parallel for
     for (size_t hh = 0; hh < N_Q_HEADS; ++hh) {
         for (size_t ii = 0; ii < HEAD_DIM; ++ii) {
             q[hh][ii] = to_bf16(tc_bf16_fp32(0.0f, x, l->attn_q[hh][ii], DIM));
@@ -330,20 +340,11 @@ void attn(vec x, size_t pos, size_t layer_idx, const struct layer* l) {
         qk_norm(q[hh]);
         rotate_head(pos, q[hh]);
 
-        if (hh < N_KV_HEADS) {
-            for (size_t ii = 0; ii < HEAD_DIM; ++ii) {
-                k[hh][pos][ii]  = to_bf16(tc_bf16_fp32(0.0f, x, l->attn_k[hh][ii], DIM));
-                v[hh][ii] [pos] = to_bf16(tc_bf16_fp32(0.0f, x, l->attn_v[hh][ii], DIM));
-            }
-            qk_norm(k[hh][pos]);
-            rotate_head(pos, k[hh][pos]);
-        }
-
         size_t kvh = hh / (N_Q_HEADS / N_KV_HEADS);
         attn_head(is_local, pos, q[hh], k[kvh], v[kvh]);
 
         for (size_t ii = 0; ii < HEAD_DIM; ++ii) {
-            float gate = tc_bf16_fp32(0.0f, x, l->attn_gate[hh][ii], DIM);
+            float gate = trunc_to_bf16(tc_bf16_fp32(0.0f, x, l->attn_gate[hh][ii], DIM));
             q[hh][ii] = to_bf16(to_float(q[hh][ii]) * sigmoid_fast(gate));
         }
     }
@@ -363,8 +364,8 @@ void mlp(vec x, const struct layer* l) {
 
     #pragma omp parallel for
     for (size_t ii = 0; ii < INTERMEDIATE_DIM; ++ii) {
-        float to_act =  to_float(to_bf16(tc_bf16_fp32(0.0f, x, l->mlp_up[ii],   DIM)));
-        float to_gate = to_float(to_bf16(tc_bf16_fp32(0.0f, x, l->mlp_gate[ii], DIM)));
+        float to_act =  trunc_to_bf16(tc_bf16_fp32(0.0f, x, l->mlp_up[ii],   DIM));
+        float to_gate = trunc_to_bf16(tc_bf16_fp32(0.0f, x, l->mlp_gate[ii], DIM));
 
         inter[ii] = to_bf16(to_act * sigmoid_fast(to_act) * to_gate);
     }

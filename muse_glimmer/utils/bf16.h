@@ -23,3 +23,7 @@ bf16 to_bf16(float x) {
     memcpy(&res, (char*)&x_int + 2, sizeof(res));
     return res;
 }
+
+float trunc_to_bf16(float x) {
+    return to_float(to_bf16(x));
+}
