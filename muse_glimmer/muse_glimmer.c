@@ -110,6 +110,7 @@ void dump_out(vec x) {
     for (size_t ii = 0; ii < DIM; ++ii) {
         printf("%a ", to_float(x[ii]));
     }
+    puts("");
     fflush(stdout);
 }
 
@@ -364,10 +365,10 @@ void mlp(vec x, const struct layer* l) {
 
     #pragma omp parallel for
     for (size_t ii = 0; ii < INTERMEDIATE_DIM; ++ii) {
-        float to_act =  trunc_to_bf16(tc_bf16_fp32(0.0f, x, l->mlp_up[ii],   DIM));
-        float to_gate = trunc_to_bf16(tc_bf16_fp32(0.0f, x, l->mlp_gate[ii], DIM));
+        float val  = trunc_to_bf16(tc_bf16_fp32(0.0f, x, l->mlp_up[ii],   DIM));
+        float gate = trunc_to_bf16(tc_bf16_fp32(0.0f, x, l->mlp_gate[ii], DIM));
 
-        inter[ii] = to_bf16(to_act * sigmoid_fast(to_act) * to_gate);
+        inter[ii] = to_bf16(gate * sigmoid_fast(gate) * val);
     }
 
     #pragma omp parallel for
@@ -397,9 +398,9 @@ void run_layer(vec x, size_t pos, size_t layer_idx, const struct model* m) {
     rms_norm(x, POST_NORM_EPS, l->post_attn_ln);
     add     (residual, x);
 
-    rms_norm(x, PRE_NORM_EPS, l->pre_ff_ln);
-    mlp     (x, l);
-    rms_norm(x, POST_NORM_EPS, l->post_ff_ln);
+    rms_norm(residual, PRE_NORM_EPS, l->pre_ff_ln);
+    mlp     (residual, l);
+    rms_norm(residual, POST_NORM_EPS, l->post_ff_ln);
     add     (x, residual);
 }
 
