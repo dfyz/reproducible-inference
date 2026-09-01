@@ -1,4 +1,7 @@
-// gcc -std=c23 -march=native -lm -O2 -o muse_glimmer muse_glimmer.c -pedantic
+// clang -std=c23 -march=native -lm -O2 -o muse_glimmer muse_glimmer.c -pedantic
+
+#pragma STDC FENV_ACCESS ON
+#pragma STDC FP_CONTRACT OFF
 
 #include "utils/bf16.h"
 #include "utils/rope.h"
