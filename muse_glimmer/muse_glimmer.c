@@ -335,7 +335,9 @@ void attn(vec x, size_t pos, size_t layer_idx, float qk_scale, const struct laye
             v[hh][ii] [pos] = to_bf16(tc_bf16_fp32(0.0f, x, l->attn_v[hh][ii], DIM));
         }
         qk_norm(k[hh][pos]);
-        rotate_head(pos, k[hh][pos]);
+        if (is_local) {
+            rotate_head(pos, k[hh][pos]);
+        }
     }
 
     #pragma omp parallel for
@@ -344,7 +346,9 @@ void attn(vec x, size_t pos, size_t layer_idx, float qk_scale, const struct laye
             q[hh][ii] = to_bf16(tc_bf16_fp32(0.0f, x, l->attn_q[hh][ii], DIM));
         }
         qk_norm(q[hh]);
-        rotate_head(pos, q[hh]);
+        if (is_local) {
+            rotate_head(pos, q[hh]);
+        }
 
         size_t kvh = hh / (N_Q_HEADS / N_KV_HEADS);
         attn_head(is_local, pos, qk_scale, q[hh], k[kvh], v[kvh]);
