@@ -4,6 +4,7 @@
 #pragma STDC FP_CONTRACT OFF
 
 #include "utils/bf16.h"
+#include "utils/ex.h"
 #include "utils/rope.h"
 #include "utils/sigmoid.h"
 #include "utils/tc.h"
