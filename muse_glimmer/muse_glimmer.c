@@ -244,6 +244,7 @@ size_t sat_sub(size_t x, size_t y) {
 void attn_head(
     bool is_local,
     size_t pos,
+    float qk_scale,
           bf16 q [HEAD_DIM],
     const bf16 ks[MAX_SEQ_LEN][HEAD_DIM],
     const bf16 vs[HEAD_DIM][MAX_SEQ_LEN]
@@ -280,12 +281,12 @@ void attn_head(
         }
 
         // 2. Scale the previous score sums.
-        float max_scaled = l_max * QK_SCALE;
-        float score_scale = ex2((prev_l_max - l_max)*QK_SCALE);
+        float max_scaled = l_max * qk_scale;
+        float score_scale = ex2((prev_l_max - l_max)*qk_scale);
 
         // 3. Exponentiate the scores, update the score sums.
         for (size_t ii = 0; ii < KV_TILE; ++ii) {
-            float score = ex2(fmaf(logits[ii], QK_SCALE, -max_scaled));
+            float score = ex2(fmaf(logits[ii], qk_scale, -max_scaled));
             scores[ii] = to_bf16(score);
 
             size_t qq = ii / N_ELEM_PER_SUM;
@@ -320,7 +321,7 @@ void attn_head(
     }
 }
 
-void attn(vec x, size_t pos, size_t layer_idx, const struct layer* l) {
+void attn(vec x, size_t pos, size_t layer_idx, float qk_scale, const struct layer* l) {
     bf16 q[N_Q_HEADS][HEAD_DIM];
     auto k = K_CACHE[layer_idx];
     auto v = V_CACHE[layer_idx];
@@ -346,7 +347,7 @@ void attn(vec x, size_t pos, size_t layer_idx, const struct layer* l) {
         rotate_head(pos, q[hh]);
 
         size_t kvh = hh / (N_Q_HEADS / N_KV_HEADS);
-        attn_head(is_local, pos, q[hh], k[kvh], v[kvh]);
+        attn_head(is_local, pos, qk_scale, q[hh], k[kvh], v[kvh]);
 
         for (size_t ii = 0; ii < HEAD_DIM; ++ii) {
             float gate = trunc_to_bf16(tc_bf16_fp32(0.0f, x, l->attn_gate[hh][ii], DIM));
@@ -381,7 +382,7 @@ void mlp(vec x, const struct layer* l) {
     }
 }
 
-void run_layer(vec x, size_t pos, size_t layer_idx, const struct model* m) {
+void run_layer(vec x, size_t pos, size_t layer_idx, float qk_scale, const struct model* m) {
     constexpr size_t P1_LAYER_INDEXES[N_LAYERS_PART_1] = {
         0, 1, 12, 23, 34, 40, 41, 42, 43, 44,
         2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14,
@@ -398,7 +399,7 @@ void run_layer(vec x, size_t pos, size_t layer_idx, const struct model* m) {
     memcpy(residual, x, sizeof(residual));
 
     rms_norm(x, PRE_NORM_EPS, l->input_ln);
-    attn    (x, pos, layer_idx, l);
+    attn    (x, pos, layer_idx, qk_scale, l);
     rms_norm(x, POST_NORM_EPS, l->post_attn_ln);
     add     (x, residual);
 
@@ -410,6 +411,8 @@ void run_layer(vec x, size_t pos, size_t layer_idx, const struct model* m) {
 
 int main() {
     auto model = load_model();
+
+    const float qk_scale = (float)((float)(QK_SCALE / sqrtf(HEAD_DIM)) * log2f(expf(1.0f)));
 
     size_t n_tokens;
     scanf("%zu", &n_tokens);
@@ -425,7 +428,7 @@ int main() {
         for (size_t li = 0; li < N_LAYERS; ++li) {
             fprintf(stderr, "layer %zu\n", li);
 
-            run_layer(x, pos, li, &model);
+            run_layer(x, pos, li, qk_scale, &model);
         }
 
         dump_out(x);
