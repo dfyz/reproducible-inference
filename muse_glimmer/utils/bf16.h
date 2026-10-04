@@ -27,3 +27,4 @@ bf16 to_bf16(float x) {
 float trunc_to_bf16(float x) {
     return to_float(to_bf16(x));
 }
+
