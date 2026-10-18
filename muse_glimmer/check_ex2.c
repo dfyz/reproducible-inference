@@ -26,9 +26,12 @@ int main() {
             float our = ex2(tmp.f);
 
             if (ref != our) {
-                printf("x   = %.13a\n", tmp.f);
-                printf("ref = %.13a\n", ref);
-                printf("our = %.13a\n", our);
+                #pragma omp critical
+                {
+                    printf("x   = %.13a\n", tmp.f);
+                    printf("ref = %.13a\n", ref);
+                    printf("our = %.13a\n", our);
+                }
                 exit(1);
             }
         }
