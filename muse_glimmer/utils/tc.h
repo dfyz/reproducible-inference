@@ -12,10 +12,7 @@
 constexpr size_t K_DIM = 16;
 
 int32_t get_exp(float x) {
-    uint32_t x_int;
-    memcpy(&x_int, &x, sizeof(x));
-    int32_t b_exp = (x_int >> 23) & 0xff;
-    return (b_exp + (b_exp == 0)) - 127;
+    return maxi(-126, ilogbf(x));
 }
 
 double shift(double x, double magic) {
