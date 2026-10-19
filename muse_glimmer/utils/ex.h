@@ -7,8 +7,6 @@
 #pragma STDC FENV_ACCESS ON
 #pragma STDC FP_CONTRACT OFF
 
-#define TRUNCATE(x, magic) (x + magic - magic)
-
 constexpr double COEFS[64][3] = {
     { 0x1.000001df88p+0, 0x1.62e4p-1, 0x1.ee0p-3 },
     { 0x1.02c9a55f88p+0, 0x1.66c0p-1, 0x1.f50p-3 },
@@ -76,27 +74,35 @@ constexpr double COEFS[64][3] = {
     { 0x1.fa7c1a5f88p+0, 0x1.5f10p+0, 0x1.ea0p-2 },
 };
 
+// For a number in [0, 1), drop every bit less than 2^-threshold.
+// E.g., truncate(2^-3 + 2^-6 + 2^-10, 9) will return 2^-3 + 2^-6.
+double truncate(double x, int threshold) {
+    double magic = ldexp(1.0, 52 - threshold);
+    return x + magic - magic;
+}
+
 double approx_square(double x) {
     double x_orig = x;
     double res = 0.0f;
     for (double bit = 0x1p-7; bit >= 0x1p-21; bit *= 0.5) {
         if (x >= bit) {
-            res += TRUNCATE(x_orig * bit, 0x1p24);
+            res += truncate(x_orig * bit, 28);
             x -= bit;
         }
     }
-    return TRUNCATE(res, 0x1p25);
+    return truncate(res, 27);
 }
 
 float __ex2(float x) {
     if (x >= 128.0f) return INFINITY;
     if (x < -126.0f) return 0.0f;
 
-    int integral = (int)x;
-    float frac = TRUNCATE(fabsf(x - integral), 1.0f);
+    int    integral = (int)x;
+    double raw_frac = fabs(x - integral);
+    double frac     = truncate(raw_frac, 23);
 
-    if (frac != 0.0f && x < 0.0f) {
-        frac = 1.0f - 0x1p-23f - frac;
+    if (frac != 0.0 && x < 0.0) {
+        frac = 1.0 - 0x1p-23 - frac;
         --integral;
     }
 
