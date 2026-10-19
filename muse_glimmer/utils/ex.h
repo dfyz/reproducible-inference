@@ -74,10 +74,13 @@ constexpr double COEFS[64][3] = {
     { 0x1.fa7c1a5f88p+0, 0x1.5f10p+0, 0x1.ea0p-2 },
 };
 
-// For a number in [0, 1), drop every bit less than 2^-threshold.
-// E.g., truncate(2^-3 + 2^-6 + 2^-10, 9) will return 2^-3 + 2^-6.
+// Drop every place of `x` below 2^-threshold.
+// E.g., truncate(2^-3 + 2^-6 + 2^-10, 9)
+//              = 2^-3 + 2^-6
 double truncate(double x, int threshold) {
-    double magic = ldexp(1.0, 52 - threshold);
+    // For this trick to work, we assume that `|x|`
+    // is comfortably smaller than `magic`.
+    double magic = copysign(ldexp(1.0, 52 - threshold), x);
     return x + magic - magic;
 }
 
@@ -94,23 +97,38 @@ double approx_square(double x) {
 }
 
 float __ex2(float x) {
+    // Check special cases first.
     if (x >= 128.0f) return INFINITY;
     if (x < -126.0f) return 0.0f;
 
-    int    integral = (int)x;
-    double raw_frac = fabs(x - integral);
-    double frac     = truncate(raw_frac, 23);
+    // We decompose an arbitrary `x` into its integral and fractional
+    // parts (`integral` and `frac` below) and compute the exponential
+    // of the fractional part only.
+    //
+    // Moreover, we ignore every place of x smaller than 2^-23.
+    double x_trunc = truncate(x, 23);
 
-    if (frac != 0.0 && x < 0.0) {
-        frac = 1.0 - 0x1p-23 - frac;
-        --integral;
+    double integral = floor(x_trunc);
+    double frac     = x_trunc - integral;
+    if (frac != 0.0 && x_trunc < 0.0) {
+        // For negative numbers with a non-zero fractional part,
+        // we have to apply a correction in the lowest place
+        // before proceeding.
+        frac -= 0x1p-23;
     }
 
-    size_t base_idx = (size_t)(frac * 0x1p6);
-    double offset = frac - base_idx*0x1p-6;
+    // Split all possible fractional parts into 64 equal groups.
+    // The index of the group selects the polynomial to apply.
+    size_t group_idx = (size_t)(frac * 0x1p6);
+    const double* cc = COEFS[group_idx];
 
-    const double* cc = COEFS[base_idx];
-    double poly = cc[0] + offset*cc[1] + approx_square(offset)*cc[2];
+    // Compute the distance from the fractional part
+    // to the beginning of its group, then apply a
+    // quadratic polynomial.
+    double dist = frac - group_idx*0x1p-6;
+    double poly = cc[0] + dist*cc[1] + approx_square(dist)*cc[2];
+
+    // Re-combine the result with the integral part.
     return ldexp(poly, integral);
 }
 
