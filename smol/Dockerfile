@@ -1,5 +1,7 @@
 FROM alpine:3.23.3
 
+ENV PYTHONDONTWRITEBYTECODE=1
+
 RUN apk add git python3 py3-pyaml py3-pytest libfaketime
 
 # Set the global fake time.
@@ -11,6 +13,8 @@ RUN sed \
     -i /usr/lib/python3.12/site-packages/_pytest/terminal.py
 
 RUN git clone https://github.com/dbreunig/whenwords.git /root/whenwords
+# Only leave SPEC.md and tests.yaml
+RUN find /root/whenwords -mindepth 1 -maxdepth 1 ! -name 'SPEC.md' ! -name 'tests.yaml' -exec rm -rf -- {} +
 WORKDIR /root
 COPY smol_agent.py .
 COPY whenwords.txt .

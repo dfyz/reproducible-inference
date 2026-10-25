@@ -70,8 +70,8 @@ def get_tool_result_message(tool):
     assert tool_func.get('name') == 'sh', tool_func
     assert 'arguments' in tool_func, tool_func
     tool_args = json.loads(tool_func['arguments'])
-    assert 'cmd' in tool_args, tool_args
-    sh_cmd = tool_args['cmd']
+    assert 'command' in tool_args or 'cmd' in tool_args, tool_args
+    sh_cmd = tool_args['cmd'] if 'cmd' in tool_args else tool_args['command']
     assert isinstance(sh_cmd, str)
 
     sh_res = subprocess.run(
