@@ -89,25 +89,9 @@ static const ptxm_params model_params =
 
 float ptxm_rsqrt_sm5x_internal(float x, const ptxm_params *params)
 {
-    int x_log2 = 0;
-
-    switch (fpclassify(x))
-    {
-    case FP_NAN:
-        return ptxm_nan();
-    case FP_INFINITE:
-        return signbit(x) ? ptxm_nan() : 0.0f;
-    case FP_ZERO:
-        return copysignf(INFINITY, x);
-    case FP_SUBNORMAL:
-        x_log2 = -24;
-        x *= 0x1p24f;
-        break;
-    }
-
     if (signbit(x)) return ptxm_nan();
 
-    x_log2 += ilogbf(x);
+    int x_log2 = ilogbf(x);
 
     const uint32_t x_bits = float_as_u32(x);
 

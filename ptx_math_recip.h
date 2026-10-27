@@ -83,23 +83,7 @@ const uint32_t ptxm_rcp_table[128][3] =
 
 float ptxm_rcp_sm5x_internal(float x, const ptxm_params *params)
 {
-    int x_log2 = 0;
-
-    switch (fpclassify(x))
-    {
-    case FP_NAN:
-        return ptxm_nan();
-    case FP_INFINITE:
-        return copysignf(0.0f, x);
-    case FP_ZERO:
-        return copysignf(INFINITY, x);
-    case FP_SUBNORMAL:
-        x_log2 = -24;
-        x *= 0x1p24f;
-        break;
-    }
-
-    x_log2 += ilogbf(x);
+    int x_log2 = ilogbf(x);
 
     const uint32_t x_bits = float_as_u32(x);
 
