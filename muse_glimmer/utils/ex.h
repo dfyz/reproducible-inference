@@ -1,5 +1,8 @@
 #pragma once
 
+#include "approx_square.h"
+#include "truncate.h"
+
 #include <fenv.h>
 #include <math.h>
 #include <stddef.h>
@@ -73,42 +76,6 @@ constexpr double COEFS[64][3] = {
     { 0x1.f50767df88p+0, 0x1.5b48p+0, 0x1.e48p-2 },
     { 0x1.fa7c1a5f88p+0, 0x1.5f10p+0, 0x1.ea0p-2 },
 };
-
-// Drop every place of `x` below 2^-threshold.
-// E.g., truncate(2^-3 + 2^-6 + 2^-10, 9)
-//              = 2^-3 + 2^-6
-double truncate(double x, int threshold) {
-    // For this trick to work, we assume that `|x|`
-    // is comfortably smaller than `magic`.
-    double magic = copysign(ldexp(1.0, 52 - threshold), x);
-    return x + magic - magic;
-}
-
-double approx_square(double x) {
-    // > [...] We are able to truncate the squarer output,
-    // > such that we only require 15 output bits [...]
-    // 15 output bits means dropping everything below 2^-27.
-    constexpr int THRESHOLD = 27;
-
-    double x_orig = x;
-    double res = 0.0f;
-
-    for (double place = 0x1p-7; place >= 0x1p-21; place *= 0.5) {
-        if (x >= place) {
-            // > [...] It uses a well-known technique of re-arranging
-            // > the partial product matrix due to identical multiplier input [...]
-            //
-            // > [...] We further truncate [...] partial product bits themselves which
-            // > contribute toward output bits which would ultimately be truncated [...]
-            //
-            // We don't rearrange the partial product matrix, so we have to increase
-            // the truncation threshold.
-            res += truncate(x_orig * place, THRESHOLD + 1);
-            x -= place;
-        }
-    }
-    return truncate(res, THRESHOLD);
-}
 
 float __ex2(float x) {
     // Check special cases first.
