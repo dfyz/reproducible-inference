@@ -1,9 +1,9 @@
 #pragma once
 
 #include "approx_square.h"
+#include "rm.h"
 #include "truncate.h"
 
-#include <fenv.h>
 #include <math.h>
 #include <stddef.h>
 
@@ -114,11 +114,7 @@ float __ex2(float x) {
 }
 
 float ex2(float x) {
-    int prev_mode = fegetround();
-    fesetround(FE_TOWARDZERO);
-    float res = __ex2(x);
-    fesetround(prev_mode);
-    return res;
+    return with_rm(FE_TOWARDZERO, __ex2, x);
 }
 
 constexpr float LOG2_E = 0x1.715476p+0f;
