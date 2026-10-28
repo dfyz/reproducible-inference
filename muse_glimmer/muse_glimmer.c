@@ -420,12 +420,16 @@ int main() {
     const float qk_scale = (float)((float)(QK_SCALE / sqrtf(HEAD_DIM)) * log2f(expf(1.0f)));
 
     size_t n_tokens;
-    scanf("%zu", &n_tokens);
+    if (scanf("%zu", &n_tokens) != 1) {
+        errx(42, "failed to read the number of tokens");
+    }
 
     vec x;
     for (size_t pos = 0; pos < n_tokens; ++pos) {
         size_t token;
-        scanf("%zu", &token);
+        if (scanf("%zu", &token) != 1) {
+            errx(43, "failed to read token %zu", pos);
+        }
 
         memcpy(&x, model.p1->embeds[token], sizeof(x));
         rms_norm(x, PRE_NORM_EPS, nullptr);
