@@ -114,7 +114,10 @@ float __ex2(float x) {
 }
 
 float ex2(float x) {
-    return with_rm(FE_TOWARDZERO, __ex2, x);
+    RETURN_WITH_RM(
+        FE_TOWARDZERO,
+        __ex2(x)
+    );
 }
 
 constexpr float LOG2_E = 0x1.715476p+0f;

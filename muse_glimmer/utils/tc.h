@@ -52,9 +52,8 @@ float __tc_bf16_fp32(float c, const bf16* a, const bf16* b, size_t n_elems) {
 }
 
 float tc_bf16_fp32(float c, const bf16* a, const bf16* b, size_t n_elems) {
-    int prev_mode = fegetround();
-    fesetround(FE_TOWARDZERO);
-    float res = __tc_bf16_fp32(c, a, b, n_elems);
-    fesetround(prev_mode);
-    return res;
+    RETURN_WITH_RM(
+        FE_TOWARDZERO,
+        __tc_bf16_fp32(c, a, b, n_elems)
+    );
 }
