@@ -3,6 +3,7 @@
 #include <math.h>
 
 // Drop every place of `x` below 2^-threshold.
+// Assumes FE_TOWARDZERO is active.
 // E.g., truncate(2^-3 + 2^-6 + 2^-10, 9)
 //              = 2^-3 + 2^-6
 double truncate(double x, int threshold) {

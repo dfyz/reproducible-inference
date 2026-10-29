@@ -2,6 +2,7 @@
 
 #include "bf16.h"
 #include "minmax.h"
+#include "truncate.h"
 
 #include <fenv.h>
 #include <math.h>
@@ -13,11 +14,6 @@ constexpr size_t K_DIM = 16;
 
 int32_t get_exp(float x) {
     return maxi(-126, ilogbf(x));
-}
-
-double shift(double x, double magic) {
-    magic = copysign(magic, x);
-    return x + magic - magic;
 }
 
 int32_t guard_zero(double res, int32_t exp) {
@@ -44,10 +40,10 @@ float __tc_bf16_fp32(float c, const bf16* a, const bf16* b, size_t n_elems) {
             addends[ii - off] = prod;
         }
 
-        double magic = ldexp(0x1p27, max_exp);
-        double acc = shift(c, magic);
+        int threshold = 25 - max_exp;
+        double acc = truncate(c, threshold);
         for (size_t ii = 0; ii < K_DIM; ++ii) {
-            acc += shift(addends[ii], magic);
+            acc += truncate(addends[ii], threshold);
         }
         c = acc;
     }
