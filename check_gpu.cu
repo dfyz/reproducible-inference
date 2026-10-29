@@ -1,5 +1,6 @@
-// nvcc -DMODE=... -std=c++20 -Xcompiler=-mbmi2 -arch=sm_90a -O3 -o check_exp check_exp.cu
+// nvcc -DMODE=... -std=c++20 -Xcompiler=-mbmi2 -arch=sm_90a -O3 -o check_gpu check_gpu.cu
 #include "ptx_math_exp2f.h"
+#include "ptx_math_recip.h"
 
 #include <cmath>
 #include <cfenv>
@@ -11,6 +12,8 @@ enum class Mode {
     Exp2,
     FastExp,
     Exp,
+
+    Rcp,
 };
 
 #ifndef MODE
@@ -42,6 +45,8 @@ __global__ void Check(float* out) {
             xx_out = __expf(xx_float);
         } else if constexpr (mode == Mode::Exp) {
             xx_out = expf(xx_float);
+        } else if constexpr (mode == Mode::Rcp) {
+            asm("rcp.approx.ftz.f32 %0, %1;" : "=f"(xx_out) : "f"(xx_float));
         } else {
             static_assert(AlwaysFalse<mode>);
         }
@@ -91,7 +96,8 @@ float GetCpuRes(float x) {
         memcpy(&y, &y_int, sizeof(float));
 
         return y * ptxm_ex2_sm5x(z);
-
+    } else if constexpr (mode == Mode::Rcp) {
+        return ptxm_rcp_sm5x(x);
     } else {
         static_assert(AlwaysFalse<mode>);
     }
