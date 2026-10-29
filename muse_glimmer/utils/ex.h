@@ -10,7 +10,7 @@
 #pragma STDC FENV_ACCESS ON
 #pragma STDC FP_CONTRACT OFF
 
-constexpr double COEFS[64][3] = {
+constexpr double EX2_COEFS[64][3] = {
     { 0x1.000001df88p+0, 0x1.62e4p-1, 0x1.ee0p-3 },
     { 0x1.02c9a55f88p+0, 0x1.66c0p-1, 0x1.f50p-3 },
     { 0x1.059b0f5f88p+0, 0x1.6aa8p-1, 0x1.fa0p-3 },
@@ -101,7 +101,7 @@ float __ex2(float x) {
     // Split all possible fractional parts into 64 equal groups.
     // The index of the group selects the polynomial to apply.
     size_t group_idx = (size_t)(frac * 0x1p6);
-    const double* cc = COEFS[group_idx];
+    const double* cc = EX2_COEFS[group_idx];
 
     // Compute the distance from the fractional part
     // to the beginning of its group, then apply a
