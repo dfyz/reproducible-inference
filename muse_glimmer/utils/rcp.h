@@ -140,6 +140,7 @@ constexpr double RCP_COEFS[128][3] = {
 float __rcp(float x) {
     int exp;
     float frac = 2.0f*fabsf(frexpf(x, &exp)) - 1.0f;
+    --exp;
 
     size_t group_idx = (size_t)(frac * 0x1p7);
     const double* cc = RCP_COEFS[group_idx];
@@ -147,7 +148,7 @@ float __rcp(float x) {
     double dist = frac - group_idx*0x1p-7;
     double poly = cc[0] - dist*cc[1] + approx_square(dist*2.0f)*cc[2]*0.25f;
 
-    return ldexp(poly, -exp);
+    return copysign(ldexp(poly, -exp), x);
 }
 
 float rcp(float x) {
