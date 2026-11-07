@@ -18,6 +18,18 @@ union fp32_int {
 
 typedef float (*mfu_func)(float);
 
+float ptxm_rcp_sm5x_no_denorms(float x) {
+    auto x_class = fpclassify(x);
+    if (x_class == FP_SUBNORMAL || x_class == FP_ZERO) {
+        return copysign(INFINITY, x);
+    }
+    float res = ptxm_rcp_sm5x(x);
+    if (fpclassify(res) == FP_SUBNORMAL) {
+        return copysign(0.0f, res);
+    }
+    return res;
+}
+
 int main(int argc, char** argv) {
     if (argc != 2) {
         fprintf(stderr, "specify the function to test: ex2|rcp\n");
@@ -30,7 +42,7 @@ int main(int argc, char** argv) {
         ref_func = ptxm_ex2_sm5x;
         our_func = ex2;
     } else if (strcmp(func, "rcp") == 0) {
-        ref_func = ptxm_rcp_sm5x;
+        ref_func = ptxm_rcp_sm5x_no_denorms;
         our_func = rcp;
     } else {
         fprintf(stderr, "unknown function %s\n", func);

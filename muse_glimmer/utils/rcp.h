@@ -138,8 +138,13 @@ constexpr double RCP_COEFS[128][3] = {
 };
 
 float __rcp(float x) {
+    float abs_x = fabsf(x);
+
+    if (abs_x > 0x1p+126f) return copysign(0.0f, x);
+    if (abs_x < 0x1p-126f) return copysign(INFINITY, x);
+
     int exp;
-    float frac = 2.0f*fabsf(frexpf(x, &exp)) - 1.0f;
+    float frac = 2.0f*frexpf(abs_x, &exp) - 1.0f;
     --exp;
 
     size_t group_idx = (size_t)(frac * 0x1p7);
