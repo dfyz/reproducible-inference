@@ -1,8 +1,8 @@
 #pragma once
 
 #include "ex.h"
-#include "../../ptx_math_recip.h"
+#include "rcp.h"
 
 float sigmoid_fast(float x) {
-    return ptxm_rcp_sm5x(1.0f + ex_fast(-x));
+    return rcp(1.0f + ex_fast(-x));
 }

@@ -7,9 +7,9 @@
 #include "utils/ex.h"
 #include "utils/rope.h"
 #include "utils/sigmoid.h"
+#include "utils/rcp.h"
 #include "utils/tc.h"
 
-#include "../ptx_math_recip.h"
 #include "../ptx_math_rsqrt.h"
 
 #include <err.h>
@@ -315,7 +315,7 @@ void attn_head(
 
     // Make the final output correction.
     float final_sum = (s_sums[0] + s_sums[2]) + (s_sums[1] + s_sums[3]);
-    float final_sum_inv = ptxm_rcp_sm5x(final_sum);
+    float final_sum_inv = rcp(final_sum);
 
     for (size_t ii = 0; ii < HEAD_DIM; ++ii) {
         q[ii] = to_bf16(out_raw[ii] * final_sum_inv);
