@@ -243,4 +243,7 @@ if __name__ == '__main__':
         c1_fp = shift_coef(c1, 1, tbl)
         c2_fp = shift_coef(c2, 2, tbl)
 
+        if mode == 'rcp':
+            c2_fp *= 0.25
+
         print(f"{{ {to_hex(c0_fp, 10)}, {to_hex(c1_fp, 4)}, {to_hex(c2_fp, 3)} }},")
