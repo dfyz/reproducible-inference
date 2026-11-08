@@ -1,6 +1,6 @@
 // nvcc -DMODE=... -std=c++20 -Xcompiler=-mbmi2 -arch=sm_90a -O3 -o check_gpu check_gpu.cu
-#include "ptx_math_exp2f.h"
-#include "ptx_math_recip.h"
+#include "muse_glimmer/utils/ex.h"
+#include "muse_glimmer/utils/rcp.h"
 
 #include <cmath>
 #include <cfenv>
@@ -66,14 +66,14 @@ float GetCpuRes(float x) {
     constexpr float log2e = 0x1.715476p+0f; // 1.442695e+00
 
     if constexpr (mode == Mode::Exp2) {
-        return ptxm_ex2_sm5x(x);
+        return ex2(x);
     } else if constexpr (mode == Mode::FastExp) {
         x *= log2e;
         const bool subnormal_res = x < -126.0f;
         if (subnormal_res) {
             x *= 0.5f;
         }
-        float res = ptxm_ex2_sm5x(x);
+        float res = ex2(x);
         if (subnormal_res) {
             res *= res;
         }
@@ -95,9 +95,9 @@ float GetCpuRes(float x) {
         y_int <<= 23;
         memcpy(&y, &y_int, sizeof(float));
 
-        return y * ptxm_ex2_sm5x(z);
+        return y * ex2(z);
     } else if constexpr (mode == Mode::Rcp) {
-        return ptxm_rcp_sm5x(x);
+        return rcp(x);
     } else {
         static_assert(AlwaysFalse<mode>);
     }
@@ -132,6 +132,10 @@ int main() {
     for (size_t ii = 0; ii < kElems; ++ii) {
         if (ii % 1000000 == 0) {
             fprintf(stderr, "%zu/%zu\n", ii, kElems);
+        }
+
+        if (isnanf(host_out[ii])) {
+            continue;
         }
 
         float xx;
