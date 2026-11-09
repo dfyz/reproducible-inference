@@ -12,13 +12,9 @@ RUN sed \
     's/"""Format the given seconds in a human readable manner to show in the final summary."""/return "due time"/' \
     -i /usr/lib/python3.12/site-packages/_pytest/terminal.py
 
-RUN git clone https://github.com/dbreunig/whenwords.git /root/whenwords
-# Only leave SPEC.md and tests.yaml
-RUN find /root/whenwords -mindepth 1 -maxdepth 1 ! -name 'SPEC.md' ! -name 'tests.yaml' -exec rm -rf -- {} +
-WORKDIR /root
-COPY smol_agent.py .
-COPY whenwords.txt .
-RUN mkdir -p results/a results/b
+RUN git clone https://github.com/dfyz/whenwords.git /root/whenwords
+# Only leave PROMPT.md and tests.yaml
+RUN find /root/whenwords -mindepth 1 -maxdepth 1 ! -name 'PROMPT.md' -exec rm -rf -- {} +
+COPY smol_agent.py /root
 
 WORKDIR /root/whenwords
-

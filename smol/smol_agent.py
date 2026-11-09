@@ -10,9 +10,8 @@ import urllib.request
 
 
 MAX_STEPS = 10000
-BASE_PATH = Path(__file__).parent
-PROMPT = (BASE_PATH / 'whenwords.txt').read_text()
-SYSTEM_PROMPT = 'You are a coding agent with access to a shell tool.'
+PROMPT = Path('PROMPT.md').read_text()
+SYSTEM_PROMPT = 'You are a coding agent with access to a shell tool. Reasoning strength: low.'
 TOOLS = [
     {
         'type': 'function',
