@@ -25,10 +25,14 @@ int main(int argc, char** argv) {
     uint64_t max_gpu_diff = 0;
     uint64_t max_tpu_diff = 0;
 
+    uint64_t gpu_inexact = 0;
+    uint64_t tpu_inexact = 0;
+
     for (size_t ii = 0; ii <= UINT_MAX; ++ii) {
         if (ii % 100'000'000 == 0) {
             fprintf(stderr, "%zu/%u (%lu mismatches)\n", ii, UINT_MAX + 1, mismatches);
             fprintf(stderr, "max GPU diff = %lu ULPs, max TPU diff = %lu ULPs\n", max_gpu_diff, max_tpu_diff);
+            fprintf(stderr, "GPU inexact = %lu, TPU inexact = %lu\n", gpu_inexact, tpu_inexact);
         }
 
         float x;
@@ -48,6 +52,7 @@ int main(int argc, char** argv) {
                 if (diff > max_gpu_diff) {
                     max_gpu_diff = diff;
                 }
+                ++gpu_inexact;
             }
 
             if (ref_res != tpu_res) {
@@ -55,6 +60,7 @@ int main(int argc, char** argv) {
                 if (diff > max_tpu_diff) {
                     max_tpu_diff = diff;
                 }
+                ++tpu_inexact;
             }
         }
 
