@@ -68,8 +68,8 @@ struct model {
 
 struct model load_model() {
     return (struct model) {
-        .p1 = load_st("model-00001-of-00002.safetensors", nullptr, sizeof(struct layers_part_1)),
-        .p2 = load_st("model-00002-of-00002.safetensors", nullptr, sizeof(struct layers_part_2)),
+        .p1 = load_st("model-00001-of-00002.safetensors", nullptr),
+        .p2 = load_st("model-00002-of-00002.safetensors", nullptr),
     };
 }
 

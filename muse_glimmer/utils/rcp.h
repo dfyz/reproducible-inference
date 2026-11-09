@@ -1,5 +1,8 @@
 #pragma once
 
+#include "approx_square.h"
+#include "rm.h"
+
 #include <math.h>
 #include <stddef.h>
 

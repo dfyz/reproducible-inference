@@ -6,7 +6,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-void* load_st(const char* file_name, void* addr, size_t n_bytes) {
+#include <stdint.h>
+
+void* load_st(const char* file_name, void* addr) {
     // We rely on the OS unmapping the file and closing the FD.
     int fd = open(file_name, O_RDONLY);
     if (fd < 0) {
