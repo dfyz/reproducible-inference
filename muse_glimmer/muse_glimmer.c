@@ -9,9 +9,8 @@
 #include "utils/rope.h"
 #include "utils/sigmoid.h"
 #include "utils/rcp.h"
+#include "utils/rsq.h"
 #include "utils/tc.h"
-
-#include "../ptx_math_rsqrt.h"
 
 #include <err.h>
 
@@ -145,7 +144,7 @@ float get_weight(const bf16* w, size_t ii) {
 
 void rms_norm(vec x, float eps, const bf16* w) {
     float sum = sum_row(x);
-    float rstd = ptxm_rsqrt_sm5x(sum / DIM + eps);
+    float rstd = rsq(sum / DIM + eps);
 
     for (size_t ii = 0; ii < DIM; ++ii) {
         float normed = to_float(x[ii]) * rstd * get_weight(w, ii);
@@ -178,7 +177,7 @@ float sum_row_qk(const bf16 head[HEAD_DIM]) {
 
 void qk_norm(bf16 head[HEAD_DIM]) {
     float sum = sum_row_qk(head);
-    float rstd = ptxm_rsqrt_sm5x(fmaf(sum, 1.0f/HEAD_DIM, PRE_NORM_EPS));
+    float rstd = rsq(fmaf(sum, 1.0f/HEAD_DIM, PRE_NORM_EPS));
     for (size_t ii = 0; ii < HEAD_DIM; ++ii) {
         head[ii] = to_bf16(to_float(head[ii]) * rstd);
     }
