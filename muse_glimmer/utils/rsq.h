@@ -1,0 +1,178 @@
+#pragma once
+
+#include "approx_square.h"
+#include "decompose.h"
+#include "rm.h"
+
+#include <float.h>
+#include <math.h>
+
+constexpr double RSQ_EVEN_COEFS[64][3] = {
+    { 0x1.ffffff7ffep-1, 0x1.fff6p-2, 0x1.790p-2 },
+    { 0x1.fc0bd77ffep-1, 0x1.f430p-2, 0x1.6a8p-2 },
+    { 0x1.f82ec87ffep-1, 0x1.e8dep-2, 0x1.5d0p-2 },
+    { 0x1.f467f27ffep-1, 0x1.ddf6p-2, 0x1.500p-2 },
+    { 0x1.f0b684fffep-1, 0x1.d376p-2, 0x1.440p-2 },
+    { 0x1.ed19b77ffep-1, 0x1.c956p-2, 0x1.388p-2 },
+    { 0x1.e990cd7ffep-1, 0x1.bf92p-2, 0x1.2d8p-2 },
+    { 0x1.e61b137ffep-1, 0x1.b626p-2, 0x1.230p-2 },
+    { 0x1.e2b7de7ffep-1, 0x1.ad0ep-2, 0x1.190p-2 },
+    { 0x1.df6689fffep-1, 0x1.a444p-2, 0x1.0f8p-2 },
+    { 0x1.dc267afffep-1, 0x1.9bc8p-2, 0x1.070p-2 },
+    { 0x1.d8f7207ffep-1, 0x1.9392p-2, 0x1.fc0p-3 },
+    { 0x1.d5d7e9fffep-1, 0x1.8ba2p-2, 0x1.ec0p-3 },
+    { 0x1.d2c853fffep-1, 0x1.83f4p-2, 0x1.dc0p-3 },
+    { 0x1.cfc7da7ffep-1, 0x1.7c84p-2, 0x1.cd0p-3 },
+    { 0x1.ccd604fffep-1, 0x1.7550p-2, 0x1.be0p-3 },
+    { 0x1.c9f25bfffep-1, 0x1.6e56p-2, 0x1.b10p-3 },
+    { 0x1.c71c727ffep-1, 0x1.6794p-2, 0x1.a40p-3 },
+    { 0x1.c453d8fffep-1, 0x1.6104p-2, 0x1.970p-3 },
+    { 0x1.c1982b7ffep-1, 0x1.5aa8p-2, 0x1.8b0p-3 },
+    { 0x1.bee905fffep-1, 0x1.547cp-2, 0x1.7f0p-3 },
+    { 0x1.bc46097ffep-1, 0x1.4e7ep-2, 0x1.740p-3 },
+    { 0x1.b9aedb7ffep-1, 0x1.48aep-2, 0x1.6a0p-3 },
+    { 0x1.b723257ffep-1, 0x1.4308p-2, 0x1.600p-3 },
+    { 0x1.b4a2937ffep-1, 0x1.3d8ap-2, 0x1.560p-3 },
+    { 0x1.b22cd67ffep-1, 0x1.3834p-2, 0x1.4c0p-3 },
+    { 0x1.afc19e7ffep-1, 0x1.3304p-2, 0x1.430p-3 },
+    { 0x1.ad60a2fffep-1, 0x1.2df8p-2, 0x1.3a0p-3 },
+    { 0x1.ab099bfffep-1, 0x1.290ep-2, 0x1.310p-3 },
+    { 0x1.a8bc44fffep-1, 0x1.2448p-2, 0x1.2a0p-3 },
+    { 0x1.a6785afffep-1, 0x1.1fa0p-2, 0x1.220p-3 },
+    { 0x1.a43da0fffep-1, 0x1.1b1ap-2, 0x1.1b0p-3 },
+    { 0x1.a20bd7fffep-1, 0x1.16b0p-2, 0x1.130p-3 },
+    { 0x1.9fe2c47ffep-1, 0x1.1264p-2, 0x1.0c0p-3 },
+    { 0x1.9dc22bfffep-1, 0x1.0e34p-2, 0x1.060p-3 },
+    { 0x1.9ba9dafffep-1, 0x1.0a1ep-2, 0x1.fe0p-4 },
+    { 0x1.99999a7ffep-1, 0x1.0622p-2, 0x1.f00p-4 },
+    { 0x1.979136fffep-1, 0x1.0240p-2, 0x1.e40p-4 },
+    { 0x1.95907ffffep-1, 0x1.fcecp-3, 0x1.d80p-4 },
+    { 0x1.9397437ffep-1, 0x1.f588p-3, 0x1.ce0p-4 },
+    { 0x1.91a556fffep-1, 0x1.ee50p-3, 0x1.c20p-4 },
+    { 0x1.8fba89fffep-1, 0x1.e744p-3, 0x1.b80p-4 },
+    { 0x1.8dd6b47ffep-1, 0x1.e064p-3, 0x1.ae0p-4 },
+    { 0x1.8bf9ab7ffep-1, 0x1.d9acp-3, 0x1.a40p-4 },
+    { 0x1.8a23467ffep-1, 0x1.d31cp-3, 0x1.9a0p-4 },
+    { 0x1.88535dfffep-1, 0x1.ccb4p-3, 0x1.920p-4 },
+    { 0x1.8689cdfffep-1, 0x1.c670p-3, 0x1.880p-4 },
+    { 0x1.84c66efffep-1, 0x1.c04cp-3, 0x1.7e0p-4 },
+    { 0x1.83091ffffep-1, 0x1.ba50p-3, 0x1.760p-4 },
+    { 0x1.8151bc7ffep-1, 0x1.b474p-3, 0x1.6e0p-4 },
+    { 0x1.7fa0247ffep-1, 0x1.aeb8p-3, 0x1.660p-4 },
+    { 0x1.7df437fffep-1, 0x1.a920p-3, 0x1.600p-4 },
+    { 0x1.7c4dd77ffep-1, 0x1.a3a4p-3, 0x1.580p-4 },
+    { 0x1.7aace37ffep-1, 0x1.9e44p-3, 0x1.500p-4 },
+    { 0x1.79113f7ffep-1, 0x1.9904p-3, 0x1.4a0p-4 },
+    { 0x1.777acdfffep-1, 0x1.93e0p-3, 0x1.440p-4 },
+    { 0x1.75e974fffep-1, 0x1.8ed4p-3, 0x1.3c0p-4 },
+    { 0x1.745d187ffep-1, 0x1.89e4p-3, 0x1.340p-4 },
+    { 0x1.72d59dfffep-1, 0x1.8510p-3, 0x1.2e0p-4 },
+    { 0x1.7152eb7ffep-1, 0x1.8054p-3, 0x1.280p-4 },
+    { 0x1.6fd4e8fffep-1, 0x1.7bb0p-3, 0x1.220p-4 },
+    { 0x1.6e5b7cfffep-1, 0x1.7724p-3, 0x1.1e0p-4 },
+    { 0x1.6ce693fffep-1, 0x1.72b0p-3, 0x1.180p-4 },
+    { 0x1.6b76137ffep-1, 0x1.6e50p-3, 0x1.120p-4 },
+};
+
+constexpr double RSQ_ODD_COEFS[64][3] = {
+    { 0x1.6a09e57ffep-1, 0x1.6a02p-2, 0x1.0a8p-2 },
+    { 0x1.673e31fffep-1, 0x1.61b0p-2, 0x1.008p-2 },
+    { 0x1.6482d3fffep-1, 0x1.59aep-2, 0x1.ed0p-3 },
+    { 0x1.61d72b7ffep-1, 0x1.51f8p-2, 0x1.db0p-3 },
+    { 0x1.5f3aa5fffep-1, 0x1.4a8cp-2, 0x1.cb0p-3 },
+    { 0x1.5cacb6fffep-1, 0x1.4362p-2, 0x1.ba0p-3 },
+    { 0x1.5a2cd97ffep-1, 0x1.3c7cp-2, 0x1.ab0p-3 },
+    { 0x1.57ba8afffep-1, 0x1.35d2p-2, 0x1.9c0p-3 },
+    { 0x1.555555fffep-1, 0x1.2f64p-2, 0x1.8e0p-3 },
+    { 0x1.52fcc47ffep-1, 0x1.292cp-2, 0x1.800p-3 },
+    { 0x1.50b06b7ffep-1, 0x1.232cp-2, 0x1.730p-3 },
+    { 0x1.4e6fdf7ffep-1, 0x1.1d5ep-2, 0x1.670p-3 },
+    { 0x1.4c3abf7ffep-1, 0x1.17c2p-2, 0x1.5c0p-3 },
+    { 0x1.4a10a9fffep-1, 0x1.1252p-2, 0x1.500p-3 },
+    { 0x1.47f1447ffep-1, 0x1.0d10p-2, 0x1.460p-3 },
+    { 0x1.45dc3b7ffep-1, 0x1.07fap-2, 0x1.3c0p-3 },
+    { 0x1.43d1367ffep-1, 0x1.030ap-2, 0x1.320p-3 },
+    { 0x1.41cfe97ffep-1, 0x1.fc84p-3, 0x1.290p-3 },
+    { 0x1.3fd808fffep-1, 0x1.f340p-3, 0x1.200p-3 },
+    { 0x1.3de9497ffep-1, 0x1.ea40p-3, 0x1.170p-3 },
+    { 0x1.3c03657ffep-1, 0x1.e184p-3, 0x1.0f0p-3 },
+    { 0x1.3a261c7ffep-1, 0x1.d90cp-3, 0x1.070p-3 },
+    { 0x1.38512c7ffep-1, 0x1.d0d4p-3, 0x1.000p-3 },
+    { 0x1.3684587ffep-1, 0x1.c8d4p-3, 0x1.f00p-4 },
+    { 0x1.34bf647ffep-1, 0x1.c110p-3, 0x1.e20p-4 },
+    { 0x1.330217fffep-1, 0x1.b984p-3, 0x1.d60p-4 },
+    { 0x1.314c3d7ffep-1, 0x1.b230p-3, 0x1.ca0p-4 },
+    { 0x1.2f9da0fffep-1, 0x1.ab0cp-3, 0x1.bc0p-4 },
+    { 0x1.2df60c7ffep-1, 0x1.a41cp-3, 0x1.b20p-4 },
+    { 0x1.2c5553fffep-1, 0x1.9d58p-3, 0x1.a40p-4 },
+    { 0x1.2abb447ffep-1, 0x1.96c4p-3, 0x1.9a0p-4 },
+    { 0x1.2927b47ffep-1, 0x1.905cp-3, 0x1.8e0p-4 },
+    { 0x1.279a747ffep-1, 0x1.8a20p-3, 0x1.860p-4 },
+    { 0x1.26135efffep-1, 0x1.840cp-3, 0x1.7c0p-4 },
+    { 0x1.24924a7ffep-1, 0x1.7e20p-3, 0x1.720p-4 },
+    { 0x1.23170dfffep-1, 0x1.7858p-3, 0x1.680p-4 },
+    { 0x1.21a185fffep-1, 0x1.72b8p-3, 0x1.600p-4 },
+    { 0x1.20318d7ffep-1, 0x1.6d38p-3, 0x1.560p-4 },
+    { 0x1.1ec701fffep-1, 0x1.67dcp-3, 0x1.4e0p-4 },
+    { 0x1.1d61c1fffep-1, 0x1.62a4p-3, 0x1.460p-4 },
+    { 0x1.1c01aafffep-1, 0x1.5d88p-3, 0x1.3e0p-4 },
+    { 0x1.1aa69f7ffep-1, 0x1.588cp-3, 0x1.360p-4 },
+    { 0x1.19507f7ffep-1, 0x1.53b0p-3, 0x1.300p-4 },
+    { 0x1.17ff2f7ffep-1, 0x1.4ef0p-3, 0x1.280p-4 },
+    { 0x1.16b28ffffep-1, 0x1.4a4cp-3, 0x1.220p-4 },
+    { 0x1.156a87fffep-1, 0x1.45c4p-3, 0x1.1c0p-4 },
+    { 0x1.1426fc7ffep-1, 0x1.4154p-3, 0x1.140p-4 },
+    { 0x1.12e7d07ffep-1, 0x1.3d00p-3, 0x1.100p-4 },
+    { 0x1.11acee7ffep-1, 0x1.38c4p-3, 0x1.0a0p-4 },
+    { 0x1.10763d7ffep-1, 0x1.34a0p-3, 0x1.040p-4 },
+    { 0x1.0f43a5fffep-1, 0x1.3090p-3, 0x1.f80p-5 },
+    { 0x1.0e150f7ffep-1, 0x1.2c9cp-3, 0x1.f00p-5 },
+    { 0x1.0cea63fffep-1, 0x1.28bcp-3, 0x1.e80p-5 },
+    { 0x1.0bc3907ffep-1, 0x1.24f0p-3, 0x1.dc0p-5 },
+    { 0x1.0aa07bfffep-1, 0x1.2138p-3, 0x1.d40p-5 },
+    { 0x1.098116fffep-1, 0x1.1d94p-3, 0x1.c80p-5 },
+    { 0x1.08654a7ffep-1, 0x1.1a04p-3, 0x1.c00p-5 },
+    { 0x1.074d04fffep-1, 0x1.1688p-3, 0x1.b80p-5 },
+    { 0x1.0638347ffep-1, 0x1.131cp-3, 0x1.ac0p-5 },
+    { 0x1.0526c4fffep-1, 0x1.0fc4p-3, 0x1.a40p-5 },
+    { 0x1.0418a5fffep-1, 0x1.0c7cp-3, 0x1.9c0p-5 },
+    { 0x1.030dc57ffep-1, 0x1.0944p-3, 0x1.940p-5 },
+    { 0x1.0206147ffep-1, 0x1.061cp-3, 0x1.8c0p-5 },
+    { 0x1.0101847ffep-1, 0x1.0308p-3, 0x1.840p-5 },
+};
+
+float __rsq(float x) {
+    if (x < -FLT_MIN)  return NAN;
+    if (x <  FLT_MIN)  return copysign(INFINITY, x);
+    if (x == INFINITY) return 0.0f;
+
+    float frac;
+    int exp;
+    decompose(x, &frac, &exp);
+    --frac;
+
+    size_t group_idx = (size_t)(frac * 0x1p6f);
+
+    const double* cc;
+    if (exp % 2 == 0) {
+        cc = RSQ_EVEN_COEFS[group_idx];
+        if (frac == 0.0f) {
+            return ldexp(1.0, -exp/2);
+        }
+    } else {
+        cc = RSQ_ODD_COEFS[group_idx];
+        --exp;
+    }
+
+    double dist = frac - group_idx*0x1p-6;
+    double poly = cc[0] - dist*cc[1] + approx_square(dist)*cc[2];
+
+    return ldexp(poly, -exp/2);
+}
+
+float rsq(float x) {
+    RETURN_WITH_RM(
+        FE_TOWARDZERO,
+        __rsq(x)
+    );
+}

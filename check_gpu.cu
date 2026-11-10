@@ -1,6 +1,7 @@
 // nvcc -DMODE=... -std=c++20 -Xcompiler=-mbmi2 -arch=sm_90a -O3 -o check_gpu check_gpu.cu
 #include "muse_glimmer/utils/ex.h"
 #include "muse_glimmer/utils/rcp.h"
+#include "muse_glimmer/utils/rsq.h"
 
 #include <cmath>
 #include <cfenv>
@@ -14,6 +15,7 @@ enum class Mode {
     Exp,
 
     Rcp,
+    Rsq,
 };
 
 #ifndef MODE
@@ -47,6 +49,8 @@ __global__ void Check(float* out) {
             xx_out = expf(xx_float);
         } else if constexpr (mode == Mode::Rcp) {
             asm("rcp.approx.ftz.f32 %0, %1;" : "=f"(xx_out) : "f"(xx_float));
+        } else if constexpr (mode == Mode::Rsq) {
+            asm("rsqrt.approx.ftz.f32 %0, %1;" : "=f"(xx_out) : "f"(xx_float));
         } else {
             static_assert(AlwaysFalse<mode>);
         }
@@ -98,6 +102,8 @@ float GetCpuRes(float x) {
         return y * ex2(z);
     } else if constexpr (mode == Mode::Rcp) {
         return rcp(x);
+    } else if constexpr (mode == Mode::Rsq) {
+        return rsq(x);
     } else {
         static_assert(AlwaysFalse<mode>);
     }

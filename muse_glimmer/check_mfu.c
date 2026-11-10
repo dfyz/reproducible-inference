@@ -1,9 +1,11 @@
 // clang -O2 -std=c23 -fopenmp -march=native -lm -o check_mfu check_mfu.c
 #include "utils/ex.h"
 #include "utils/rcp.h"
+#include "utils/rsq.h"
 
 #include "../ptx_math_exp2f.h"
 #include "../ptx_math_recip.h"
+#include "../ptx_math_rsqrt.h"
 
 #include <limits.h>
 #include <math.h>
@@ -30,6 +32,30 @@ float ptxm_rcp_sm5x_no_denorms(float x) {
     return res;
 }
 
+float ptxm_rsqrt_sm5x_no_denorms(float x) {
+    if (x < -FLT_MIN) {
+        return NAN;
+    }
+    if (x < FLT_MIN) {
+        return copysign(INFINITY, x);
+    }
+    if (x == INFINITY) {
+        return 0.0f;
+    }
+    float res = ptxm_rsqrt_sm5x(x);
+    if (fpclassify(res) == FP_SUBNORMAL) {
+        return copysign(0.0f, res);
+    }
+    return res;
+}
+
+bool are_equal(float x, float y) {
+    if (isnan(x) || isnan(y)) {
+        return isnan(x) && isnan(y);
+    }
+    return x == y;
+}
+
 int main(int argc, char** argv) {
     if (argc != 2) {
         fprintf(stderr, "specify the function to test: ex2|rcp\n");
@@ -44,6 +70,9 @@ int main(int argc, char** argv) {
     } else if (strcmp(func, "rcp") == 0) {
         ref_func = ptxm_rcp_sm5x_no_denorms;
         our_func = rcp;
+    } else if (strcmp(func, "rsq") == 0) {
+        ref_func = ptxm_rsqrt_sm5x_no_denorms;
+        our_func = rsq;
     } else {
         fprintf(stderr, "unknown function %s\n", func);
         exit(3);
@@ -61,7 +90,7 @@ int main(int argc, char** argv) {
             float ref = ref_func(tmp.f);
             float our = our_func(tmp.f);
 
-            if (ref != our) {
+            if (!are_equal(ref, our)) {
                 #pragma omp critical
                 {
                     printf("x   = %.13a\n", tmp.f);
