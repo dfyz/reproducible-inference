@@ -1,6 +1,7 @@
 #pragma once
 
 #include "approx_square.h"
+#include "decompose.h"
 #include "rm.h"
 
 #include <math.h>
@@ -146,11 +147,12 @@ float __rcp(float x) {
     if (abs_x > 0x1p+126f) return copysign(0.0f, x);
     if (abs_x < 0x1p-126f) return copysign(INFINITY, x);
 
+    float frac;
     int exp;
-    float frac = 2.0f*frexpf(abs_x, &exp) - 1.0f;
-    --exp;
+    decompose(abs_x, &frac, &exp);
+    --frac;
 
-    size_t group_idx = (size_t)(frac * 0x1p7);
+    size_t group_idx = (size_t)(frac * 0x1p7f);
     const double* cc = RCP_COEFS[group_idx];
 
     double dist = frac - group_idx*0x1p-7;
