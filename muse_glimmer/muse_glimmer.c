@@ -56,6 +56,7 @@ struct layers_part_2 {
     bf16 lm_head[VOCAB_SIZE][DIM];
     // layers 45 to 51 (inclusive)
     struct layer layers[N_LAYERS_PART_2];
+    bf16 output_ln[DIM];
 };
 
 constexpr size_t N_LAYERS = N_LAYERS_PART_1 + N_LAYERS_PART_2;
@@ -134,20 +135,23 @@ float sum_row(const vec x) {
     return (warp_vals[0] + warp_vals[1]) + (warp_vals[2] + warp_vals[3]);
 }
 
-float get_weight(const bf16* w, size_t ii) {
+float get_weight(const bf16* w, size_t ii, bool add_one) {
     if (w == nullptr) {
         return 1.0f;
+    }
+    if (!add_one) {
+        return to_float(w[ii]);
     }
     // +1 is performed in BF16 when loading the tensors.
     return trunc_to_bf16(to_float(w[ii]) + 1.0f);
 }
 
-void rms_norm(vec x, float eps, const bf16* w) {
+void rms_norm(vec x, float eps, const bf16* w, bool add_one) {
     float sum = sum_row(x);
     float rstd = rsq(sum / DIM + eps);
 
     for (size_t ii = 0; ii < DIM; ++ii) {
-        float normed = to_float(x[ii]) * rstd * get_weight(w, ii);
+        float normed = to_float(x[ii]) * rstd * get_weight(w, ii, add_one);
         x[ii] = to_bf16(normed);
     }
 }
@@ -375,14 +379,14 @@ void run_layer(vec x, size_t pos, size_t layer_idx, float qk_scale, const struct
     vec residual;
     memcpy(residual, x, sizeof(residual));
 
-    rms_norm(x, PRE_NORM_EPS, l->input_ln);
+    rms_norm(x, PRE_NORM_EPS, l->input_ln, true);
     attn    (x, pos, layer_idx, qk_scale, l);
-    rms_norm(x, POST_NORM_EPS, l->post_attn_ln);
+    rms_norm(x, POST_NORM_EPS, l->post_attn_ln, true);
     add     (x, residual);
 
-    rms_norm(x, PRE_NORM_EPS, l->pre_ff_ln);
+    rms_norm(x, PRE_NORM_EPS, l->pre_ff_ln, true);
     mlp     (x, l);
-    rms_norm(x, POST_NORM_EPS, l->post_ff_ln);
+    rms_norm(x, POST_NORM_EPS, l->post_ff_ln, true);
     add     (x, residual);
 }
 
@@ -404,13 +408,15 @@ int main() {
         }
 
         memcpy(&x, model.p1->embeds[token], sizeof(x));
-        rms_norm(x, PRE_NORM_EPS, nullptr);
+        rms_norm(x, PRE_NORM_EPS, nullptr, true);
 
         for (size_t li = 0; li < N_LAYERS; ++li) {
             fprintf(stderr, "layer %zu\n", li);
 
             run_layer(x, pos, li, qk_scale, &model);
         }
+
+        rms_norm(x, PRE_NORM_EPS, model.p2->output_ln, false);
 
         dump_out(x);
     }
