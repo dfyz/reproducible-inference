@@ -7,6 +7,9 @@
 #include <float.h>
 #include <math.h>
 
+#pragma STDC FENV_ACCESS ON
+#pragma STDC FP_CONTRACT OFF
+
 constexpr double RSQ_EVEN_COEFS[64][3] = {
     { 0x1.ffffff7ffep-1, 0x1.fff6p-2, 0x1.790p-2 },
     { 0x1.fc0bd77ffep-1, 0x1.f430p-2, 0x1.6a8p-2 },
