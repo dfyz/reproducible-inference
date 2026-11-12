@@ -1,6 +1,5 @@
 // clang -std=c23 -march=native -lm -O2 -o muse_glimmer muse_glimmer.c -fopenmp -pedantic -g
 
-#pragma STDC FENV_ACCESS ON
 #pragma STDC FP_CONTRACT OFF
 
 #include "utils/bf16.h"

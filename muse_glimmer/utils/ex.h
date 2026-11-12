@@ -7,7 +7,6 @@
 #include <math.h>
 #include <stddef.h>
 
-#pragma STDC FENV_ACCESS ON
 #pragma STDC FP_CONTRACT OFF
 
 constexpr double EX2_COEFS[64][3] = {
