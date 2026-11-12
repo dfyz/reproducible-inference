@@ -1,7 +1,6 @@
 #pragma once
 
 #include "bf16.h"
-#include "minmax.h"
 #include "truncate.h"
 
 #include <fenv.h>
@@ -39,7 +38,7 @@ float __tc_bf16_fp32(float c, const bf16* a, const bf16* b, size_t n_elems) {
 
             double prod = (double)lhs * (double)rhs;
             int32_t cur_exp = guard_zero(prod, get_exp(lhs) + get_exp(rhs));
-            max_exp = maxf(max_exp, cur_exp);
+            if (cur_exp > max_exp) max_exp = cur_exp;
             addends[ii - off] = prod;
         }
 

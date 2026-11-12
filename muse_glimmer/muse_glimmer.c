@@ -225,6 +225,10 @@ size_t sat_sub(size_t x, size_t y) {
     return x > y ? x - y : 0;
 }
 
+size_t mins(size_t x, size_t y) {
+    return x < y ? x : y;
+}
+
 void attn_head(
     bool is_local,
     size_t pos,
@@ -261,7 +265,7 @@ void attn_head(
                         ? tc_bf16_fp32(0.0f, q, ks[kvi], HEAD_DIM)
                         : -INFINITY;
             logits[ii] = score;
-            l_max = maxf(l_max, score);
+            if (score > l_max) l_max = score;
         }
 
         // 2. Scale the previous score sums.
