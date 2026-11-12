@@ -13,11 +13,13 @@ double truncate(double x, int threshold) {
     union flint {
         double   f;
         uint64_t i;
-    } magic = {
+    };
+    union flint tmp = {.f = x};
+    union flint magic = {
              // the exponent is biased `52 - threshold`
         .i = ((1075ull - threshold) << 52) +
              // the sign is copied from `x`
-             (x < 0.0 ? (1ull << 63) : 0),
+             (tmp.i & (1ull << 63)),
     };
     return x + magic.f - magic.f;
 }
