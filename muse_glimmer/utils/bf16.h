@@ -9,6 +9,7 @@ typedef struct {
 
 float to_float(bf16 x) {
     float res = 0.0f;
+    // Assumes little-endian.
     memcpy((char*)&res + 2, &x, sizeof(x));
     return res;
 }
