@@ -18,6 +18,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 constexpr size_t DIM              = 6656;
 constexpr size_t INTERMEDIATE_DIM = DIM * 3;
@@ -89,6 +90,13 @@ void dump_out(vec x) {
     }
     puts("");
     fflush(stdout);
+}
+
+void print_layer_time(size_t pos, struct timespec start, struct timespec end) {
+    double elapsed = (
+        (1e9*end.tv_sec + end.tv_nsec) - (1e9*start.tv_sec + start.tv_nsec)
+    ) / 1e9;
+    fprintf(stderr, "token %zu, time in seconds: %.3lf\n", pos, elapsed);
 }
 
 constexpr size_t WARP_SIZE = 32;
@@ -401,23 +409,25 @@ int main() {
     }
 
     vec x;
+    struct timespec start, end;
     for (size_t pos = 0; pos < n_tokens; ++pos) {
         size_t token;
         if (scanf("%zu", &token) != 1) {
             errx(43, "failed to read token %zu", pos);
         }
+        timespec_get(&start, TIME_UTC);
 
         memcpy(&x, model.p1->embeds[token], sizeof(x));
         rms_norm(x, PRE_NORM_EPS, nullptr, true);
 
         for (size_t li = 0; li < N_LAYERS; ++li) {
-            fprintf(stderr, "layer %zu\n", li);
-
             run_layer(x, pos, li, qk_scale, &model);
         }
 
         rms_norm(x, PRE_NORM_EPS, model.p2->output_ln, false);
 
+        timespec_get(&end, TIME_UTC);
+        print_layer_time(pos, start, end);
         dump_out(x);
     }
 }
