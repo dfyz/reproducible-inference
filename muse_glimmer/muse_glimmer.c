@@ -75,7 +75,7 @@ struct model load_model() {
 }
 
 // COMMON CONSTANTS AND GLOBAL DATA
-constexpr size_t MAX_SEQ_LEN = 16384;
+constexpr size_t MAX_SEQ_LEN = 8192;
 bf16 K_CACHE[N_LAYERS][N_KV_HEADS][MAX_SEQ_LEN][HEAD_DIM];
 bf16 V_CACHE[N_LAYERS][N_KV_HEADS][HEAD_DIM][MAX_SEQ_LEN];
 
